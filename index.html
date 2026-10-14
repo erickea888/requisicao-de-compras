@@ -235,6 +235,7 @@
     position:fixed; top:0; right:-620px; width:600px; max-width:94vw; height:100vh;
     background:var(--panel); border-left:1px solid var(--border); box-shadow:-8px 0 24px rgba(0,0,0,.14);
     z-index:41; transition:right .25s ease; display:flex; flex-direction:column;
+    height:100vh; height:100dvh;
   }
   .req-drawer.open{right:0;}
   .req-drawer-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:18px 20px; border-bottom:1px solid var(--border);}
@@ -242,7 +243,7 @@
   .req-drawer-head .sub{margin:0; font-size:11.5px; color:var(--muted);}
   .req-close{border:none; background:var(--panel-2); color:var(--muted); width:28px; height:28px; border-radius:8px; cursor:pointer; font-size:13px; flex:none;}
   .req-close:hover{color:var(--text);}
-  .req-drawer-body{padding:18px 20px; overflow-y:auto; flex:1;}
+  .req-drawer-body{padding:18px 20px; overflow-y:auto; flex:1; min-height:0; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;}
   .req-info-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; margin-bottom:18px;}
   .req-info-item .rot{font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px;}
   .req-info-item .val{font-size:13px; font-weight:600;}
@@ -261,6 +262,8 @@
   }
   .req-btn:hover{border-color:var(--accent); color:var(--accent);}
   .req-btn.cancelar:hover{border-color:var(--danger); color:var(--danger);}
+  .req-status-main, .req-status-sec{display:contents;}
+  .ordenar-mobile{display:none;}
   .req-historico{list-style:none; margin:0; padding:0; font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:8px;}
   .req-historico li{padding:9px 11px; border:1px solid var(--border); border-radius:9px; background:var(--panel-2);}
   .req-historico .rh-topo{display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12.5px; color:var(--text); font-weight:700;}
@@ -299,7 +302,7 @@
   }
   .modal-backdrop.open{opacity:1; pointer-events:auto;}
   .modal{
-    width:min(620px,94vw); max-height:88vh; background:var(--panel); border:1px solid var(--border);
+    width:min(620px,94vw); max-height:88vh; max-height:88dvh; background:var(--panel); border:1px solid var(--border);
     border-radius:var(--radius); box-shadow:0 20px 60px rgba(0,0,0,.4); display:flex; flex-direction:column;
     transform:translateY(12px) scale(.98); opacity:0; transition:transform .2s ease, opacity .2s ease;
   }
@@ -308,7 +311,7 @@
   .modal-header h3{margin:0; font-size:15px; font-weight:700;}
   .modal-close{background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:8px; width:28px; height:28px; font-size:14px; cursor:pointer; flex:none;}
   .modal-close:hover{border-color:var(--accent);}
-  .modal-body{padding:18px 20px; overflow-y:auto; overflow-x:hidden;}
+  .modal-body{padding:18px 20px; overflow-y:auto; overflow-x:hidden; min-height:0; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;}
   .modal-footer{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border); flex:none;}
 
   .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; margin-bottom:14px;}
@@ -468,6 +471,37 @@
     .form-field textarea{min-height:80px;}
 
     .notif-dropdown{width:calc(100vw - 16px);}
+
+    /* iPhone: respeitar a barra do Safari (dvh) e travar a página de trás quando há detalhe/janela aberta */
+    body.trava-scroll{position:fixed; left:0; right:0; width:100%; overflow:hidden;}
+    .req-drawer{height:100vh; height:100dvh;}
+    .modal-backdrop{height:100vh; height:100dvh; bottom:auto; padding-bottom:calc(10px + env(safe-area-inset-bottom));}
+    .modal{max-height:calc(100vh - 20px); max-height:calc(100dvh - 20px);}
+    .modal-footer{padding-bottom:calc(12px + env(safe-area-inset-bottom));}
+    .req-drawer-body{padding-bottom:calc(14px + env(safe-area-inset-bottom));}
+
+    /* Barra fixa "Salvar status" no detalhe */
+    .req-status-row{display:contents;}
+    .req-status-main{
+      display:flex; gap:8px; align-items:center; position:sticky; bottom:-1px; z-index:3;
+      background:var(--panel); margin:18px -14px 0; padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+      border-top:1px solid var(--border); box-shadow:0 -6px 14px -8px rgba(0,0,0,.25);
+    }
+    .req-status-main select{flex:1 1 auto; min-width:0;}
+    .req-status-main .req-btn{flex:none;}
+    .req-status-sec{display:flex; gap:8px; margin-top:10px;}
+    .req-status-sec .req-btn{flex:1 1 0;}
+
+    /* Ordenação nos cartões */
+    .ordenar-mobile{display:flex; gap:8px; margin-bottom:12px;}
+    .ordenar-mobile select{
+      flex:1; min-height:44px; font-size:16px; padding:8px 10px; border-radius:8px;
+      border:1px solid var(--border); background:var(--panel-2); color:var(--text); font-family:inherit;
+    }
+    .ordenar-dir{
+      flex:none; width:48px; min-height:44px; border-radius:8px; border:1px solid var(--border);
+      background:var(--panel-2); color:var(--text); font-size:14px; cursor:pointer;
+    }
   }
 </style>
 </head>
@@ -575,6 +609,18 @@
             </div>
             <button type="button" class="filtro-limpar" id="filtroReqLimpar">Limpar filtros</button>
           </div>
+          <div class="ordenar-mobile" id="ordenarMobileWrap">
+            <select id="ordenarMobile" aria-label="Ordenar por">
+              <option value="">Ordenar: padrão</option>
+              <option value="necessario">Necessário até</option>
+              <option value="prioridade">Prioridade</option>
+              <option value="status">Status</option>
+              <option value="solicitante">Solicitante</option>
+              <option value="projeto">Nº do projeto</option>
+              <option value="id">Requisição</option>
+            </select>
+            <button type="button" class="ordenar-dir" id="ordenarMobileDir" data-dir="asc" aria-label="Inverter ordem">▲</button>
+          </div>
 
           <div class="table-scroll" id="tabelaWrap">
             <table>
@@ -649,10 +695,14 @@
     </div>
 
     <div class="req-status-row">
-      <select id="reqStatusSelect"></select>
-      <button type="button" class="req-btn" id="reqStatusSalvar">Salvar status</button>
-      <button type="button" class="req-btn cancelar" id="reqStatusCancelar">Cancelar requisição</button>
-      <button type="button" class="req-btn" id="btnHistoricoRequisicao">🕓 Histórico</button>
+      <div class="req-status-main">
+        <select id="reqStatusSelect"></select>
+        <button type="button" class="req-btn" id="reqStatusSalvar">Salvar status</button>
+      </div>
+      <div class="req-status-sec">
+        <button type="button" class="req-btn cancelar" id="reqStatusCancelar">Cancelar requisição</button>
+        <button type="button" class="req-btn" id="btnHistoricoRequisicao">🕓 Histórico</button>
+      </div>
     </div>
     <p class="form-hint" id="reqStatusPermissaoAviso" style="margin-top:6px;"></p>
 
@@ -2100,6 +2150,51 @@ document.getElementById("btnFiltrosMobile").addEventListener("click", ()=>{
 ["change","input","click"].forEach(ev=>{
   document.querySelector(".filtro-toolbar").addEventListener(ev, ()=> setTimeout(atualizarContagemFiltros, 0));
 });
+
+// ---------- TRAVA DE ROLAGEM (celular) ----------
+// Com o detalhe ou uma janela aberta, a página de trás fica parada; só o conteúdo da janela rola.
+// (A regra visual vive no CSS do celular: body.trava-scroll.)
+(function(){
+  let travado = false, yGuardado = 0;
+  function atualizarTrava(){
+    const aberto = reqDrawer.classList.contains("open") || !!document.querySelector(".modal-backdrop.open");
+    if(aberto && !travado){
+      yGuardado = window.scrollY || 0;
+      document.body.style.top = (-yGuardado) + "px";
+      document.body.classList.add("trava-scroll");
+      travado = true;
+    } else if(!aberto && travado){
+      document.body.classList.remove("trava-scroll");
+      document.body.style.top = "";
+      window.scrollTo(0, yGuardado);
+      travado = false;
+    }
+  }
+  const obs = new MutationObserver(atualizarTrava);
+  [reqDrawer].concat(Array.from(document.querySelectorAll(".modal-backdrop"))).forEach(el=>{
+    obs.observe(el, {attributes:true, attributeFilter:["class"]});
+  });
+})();
+
+// ---------- ORDENAÇÃO NOS CARTÕES (celular) ----------
+(function(){
+  const sel = document.getElementById("ordenarMobile");
+  const btn = document.getElementById("ordenarMobileDir");
+  if(!sel || !btn) return;
+  function aplicar(){
+    ordenacaoAtiva = sel.value ? {campo: sel.value, direcao: btn.dataset.dir} : {campo:null, direcao:"asc"};
+    btn.textContent = btn.dataset.dir === "asc" ? "▲" : "▼";
+    renderTabela();
+  }
+  sel.addEventListener("change", ()=>{
+    btn.dataset.dir = (sel.value === "prioridade") ? "desc" : "asc"; // mais urgente primeiro
+    aplicar();
+  });
+  btn.addEventListener("click", ()=>{
+    btn.dataset.dir = btn.dataset.dir === "asc" ? "desc" : "asc";
+    aplicar();
+  });
+})();
 
 // ---------- FILTROS: EVENTOS ----------
 const filtroStatusEl = document.getElementById("filtroStatus");
