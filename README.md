@@ -15,6 +15,7 @@ A comunicação entre o departamento de suprimentos e as equipes que pedem mater
 - **Abertura de requisição** com solicitante, origem (Obras, Manutenção, Administração), nº do projeto (texto livre), prioridade, itens, observação e faturamento direto.
 - **Itens rápidos** para os materiais mais comuns e **anexos múltiplos** (documentos e fotos, inclusive tirando a foto pela câmera), com limite de tamanho por arquivo e miniaturas.
 - **Fluxo de status:** Pendente → Elaboração de pedido → Enviado → Recebido / Não recebido, além de Cancelado (com motivo obrigatório).
+- **Comprador responsável:** ao mover para Elaboração de pedido, quem assume a compra informa seu nome (obrigatório). Ele aparece no topo da requisição, com opção de alterar, e fica registrado no histórico.
 - **Regra de permissão:** só quem pediu, ou um gestor, pode marcar Recebido / Não recebido, porque é quem sabe se a mercadoria chegou. Se o prazo de entrega vence sem confirmação, a requisição passa sozinha para "Não recebido" e o solicitante é avisado.
 - **Data de entrega prevista** editável a qualquer momento.
 - **Duas visões:** tabela (colunas ordenáveis) e Kanban com arrastar e soltar.

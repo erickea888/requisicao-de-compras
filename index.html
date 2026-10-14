@@ -512,6 +512,7 @@
     <div>
       <h3 id="reqDrawerTitulo"></h3>
       <p class="sub" id="reqDrawerSub"></p>
+      <p class="sub" id="reqDrawerComprador" style="display:none; margin-top:3px;">Comprador responsável: <b id="reqDrawerCompradorNome" style="color:var(--text);"></b><button type="button" id="btnAlterarComprador" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:11px; font-family:inherit; padding:0 0 0 8px;">✎ alterar</button></p>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
       <button type="button" class="req-btn" id="btnDuplicarRequisicao">⧉ Duplicar</button>
@@ -736,6 +737,28 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="compradorBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 id="compradorTitulo">Comprador responsável</h3>
+      <button type="button" class="modal-close" id="compradorClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-erro" id="compradorErro"></p>
+      <div class="form-field full">
+        <label for="compradorInput">Comprador responsável *</label>
+        <input type="text" id="compradorInput" list="listaCompradores" placeholder="Digite o nome de quem vai comprar">
+        <datalist id="listaCompradores"></datalist>
+        <p class="form-hint">Aparece na requisição para o solicitante saber com quem falar.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="req-btn" id="compradorVoltar">Voltar</button>
+      <button type="button" class="btn-primary" id="compradorConfirmar">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="dataEntregaBackdrop">
   <div class="modal" style="max-width:420px;">
     <div class="modal-header">
@@ -744,6 +767,11 @@
     </div>
     <div class="modal-body">
       <p class="form-erro" id="dataEntregaErro"></p>
+      <div class="form-field full" id="dataEntregaCompradorWrap" style="display:none; margin-bottom:14px;">
+        <label for="dataEntregaComprador">Comprador responsável *</label>
+        <input type="text" id="dataEntregaComprador" list="listaCompradores" placeholder="Digite o nome de quem fez a compra">
+        <p class="form-hint">Esta requisição ainda não passou pela Elaboração de pedido, então o comprador também precisa ser informado.</p>
+      </div>
       <div class="form-field full">
         <label for="dataEntregaInput">Data de entrega *</label>
         <input type="date" id="dataEntregaInput">
@@ -972,6 +1000,7 @@ const DEFINICOES_SEED = [
   {status:"elaboracao", origem:"Obras",         projetoIdx:1, solicitanteIdx:7, diasCriacao:5,  diasNecessario:1,   prioridade:"normal",  anexosIdx:[0],   faturamentoDireto:false, obsIdx:5},
 ];
 
+const COMPRADOR_SEED = "Erick Rodrigues";
 (function gerarSeed(){
   const hoje = new Date();
   DEFINICOES_SEED.forEach(def=>{
@@ -994,7 +1023,7 @@ const DEFINICOES_SEED = [
     if(def.status === "cancelado"){
       empilhar("cancelado", {motivo:def.motivoCancelamento, usuario: solicitante});
     } else {
-      if(["elaboracao","enviado","recebido","nao_recebido"].includes(def.status)) empilhar("elaboracao");
+      if(["elaboracao","enviado","recebido","nao_recebido"].includes(def.status)) empilhar("elaboracao", {motivo:`Comprador responsável: ${COMPRADOR_SEED}.`});
       if(["enviado","recebido","nao_recebido"].includes(def.status)) empilhar("enviado");
       if(def.status === "recebido") empilhar("recebido", {usuario: solicitante});
       if(def.status === "nao_recebido"){
@@ -1013,6 +1042,7 @@ const DEFINICOES_SEED = [
       anexos: def.anexosIdx.map(i=>criarAnexoFalso(ANEXOS_SEED[i % ANEXOS_SEED.length])),
       faturamentoDireto: def.faturamentoDireto,
       motivoCancelamento: def.motivoCancelamento || "",
+      compradorResponsavel: ["elaboracao","enviado","recebido","nao_recebido"].includes(def.status) ? COMPRADOR_SEED : "",
       comentarios: (def.comentariosSeed || []).map(c=>({
         autor: c.autor,
         texto: c.texto,
@@ -1413,6 +1443,14 @@ function abrirDrawer(id){
   requisicaoAtualId = id;
   document.getElementById("reqDrawerTitulo").textContent = `${r.id} — ${r.solicitante}`;
   document.getElementById("reqDrawerSub").textContent = `Criada em ${fmtData(r.data)}`;
+  const compWrap = document.getElementById("reqDrawerComprador");
+  if(r.compradorResponsavel && r.status !== "pendente"){
+    compWrap.style.display = "";
+    document.getElementById("reqDrawerCompradorNome").textContent = r.compradorResponsavel;
+    document.getElementById("btnAlterarComprador").style.display = isFinalizada(r.status) ? "none" : "";
+  } else {
+    compWrap.style.display = "none";
+  }
   // Só dá pra editar os dados da requisição enquanto ela ainda está Pendente — depois que entra em
   // Elaboração de pedido, o comprador já está trabalhando em cima do que foi pedido originalmente.
   document.getElementById("btnEditarRequisicao").style.display = r.status === "pendente" ? "" : "none";
@@ -1658,6 +1696,10 @@ function tentarMudarStatus(id, novoStatus, reabrirDrawerDepois){
     abrirMotivoCancelamento(id, reabrirDrawerDepois);
     return;
   }
+  if(novoStatus === "elaboracao"){
+    abrirComprador(id, reabrirDrawerDepois, false);
+    return;
+  }
   if(novoStatus === "enviado"){
     abrirDataEntrega(id, reabrirDrawerDepois);
     return;
@@ -1692,7 +1734,11 @@ function abrirDataEntrega(id, reabrirDrawerDepois){
   reabrirDrawerAposEntrega = !!reabrirDrawerDepois;
   const r = REQUISICOES.find(x=>x.id===id);
   const eEdicao = !!(r && ["enviado","nao_recebido","recebido"].includes(r.status));
-  dataEntregaTitulo.textContent = eEdicao ? "Editar data prevista de entrega" : "Data prevista de entrega";
+  const precisaComprador = !eEdicao && !(r && r.compradorResponsavel);
+  document.getElementById("dataEntregaCompradorWrap").style.display = precisaComprador ? "" : "none";
+  document.getElementById("dataEntregaComprador").value = "";
+  if(precisaComprador) popularListaCompradores();
+  dataEntregaTitulo.textContent = eEdicao ? "Editar data prevista de entrega" : (precisaComprador ? "Comprador e data de entrega" : "Data prevista de entrega");
   dataEntregaConfirmarBtn.textContent = eEdicao ? "Salvar nova data" : "Confirmar envio";
   dataEntregaInput.value = (r && r.dataPrevistaEntrega) ? new Date(r.dataPrevistaEntrega).toISOString().slice(0,10) : "";
   dataEntregaErro.classList.remove("show");
@@ -1712,12 +1758,20 @@ dataEntregaBackdrop.addEventListener("click", (e)=>{ if(e.target === dataEntrega
 
 document.getElementById("dataEntregaConfirmar").addEventListener("click", ()=>{
   const valor = dataEntregaInput.value;
+  const rAlvo = REQUISICOES.find(x=>x.id===idPendenteEntrega);
+  const pedeComprador = document.getElementById("dataEntregaCompradorWrap").style.display !== "none";
+  const nomeComprador = document.getElementById("dataEntregaComprador").value.trim();
+  if(pedeComprador && !nomeComprador){
+    dataEntregaErro.textContent = "Informe o comprador responsável para continuar.";
+    dataEntregaErro.classList.add("show");
+    return;
+  }
   if(!valor){
     dataEntregaErro.textContent = "Informe a data prevista de entrega para continuar.";
     dataEntregaErro.classList.add("show");
     return;
   }
-  const r = REQUISICOES.find(x=>x.id===idPendenteEntrega);
+  const r = rAlvo;
   const reabrir = reabrirDrawerAposEntrega;
   if(r){
     const novaData = new Date(valor + "T00:00:00");
@@ -1725,7 +1779,12 @@ document.getElementById("dataEntregaConfirmar").addEventListener("click", ()=>{
       // Primeira vez: finalizando a compra e enviando ao fornecedor.
       r.dataPrevistaEntrega = novaData;
       r.status = "enviado";
-      r.historico.push({status:"enviado", data:new Date(), usuario: usuarioAtualNome() || "Não identificado"});
+      const entradaEnvio = {status:"enviado", data:new Date(), usuario: usuarioAtualNome() || "Não identificado"};
+      if(pedeComprador){
+        r.compradorResponsavel = nomeComprador;
+        entradaEnvio.motivo = `Comprador responsável: ${escapeHtml(nomeComprador)}.`;
+      }
+      r.historico.push(entradaEnvio);
     } else {
       // Edição de uma data já existente (pedido já enviado, ou marcado como não recebido e o
       // fornecedor combinou um novo prazo) — não mexe no status de "Recebido"/"Cancelado".
@@ -1836,6 +1895,83 @@ document.getElementById("motivoCancelConfirmar").addEventListener("click", ()=>{
   }
   motivoCancelBackdrop.classList.remove("open");
   idPendenteCancelamento = null;
+  if(r){
+    renderTabela();
+    renderKanban();
+    renderKPIs();
+    if(reabrir) abrirDrawer(r.id);
+  }
+});
+
+// ---------- COMPRADOR RESPONSÁVEL (obrigatório ao entrar em "Elaboração de pedido") ----------
+// Quem assume a compra se identifica aqui; o nome aparece no topo da requisição pra o solicitante
+// saber com quem falar. Dá pra corrigir depois pelo "✎ alterar" ao lado do nome.
+const compradorBackdrop = document.getElementById("compradorBackdrop");
+const compradorInput = document.getElementById("compradorInput");
+const compradorErro = document.getElementById("compradorErro");
+let idPendenteComprador = null;
+let reabrirDrawerAposComprador = false;
+let compradorModoEdicao = false;
+
+function popularListaCompradores(){
+  const nomes = [...new Set([COMPRADOR_SEED, ...REQUISICOES.map(x=>x.compradorResponsavel).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  document.getElementById("listaCompradores").innerHTML = nomes.map(n=>`<option value="${escapeHtml(n).replace(/"/g,'&quot;')}">`).join("");
+}
+function abrirComprador(id, reabrirDrawerDepois, edicao){
+  idPendenteComprador = id;
+  reabrirDrawerAposComprador = !!reabrirDrawerDepois;
+  compradorModoEdicao = !!edicao;
+  const r = REQUISICOES.find(x=>x.id===id);
+  popularListaCompradores();
+  document.getElementById("compradorTitulo").textContent = edicao ? "Alterar comprador responsável" : "Comprador responsável";
+  document.getElementById("compradorConfirmar").textContent = edicao ? "Salvar" : "Confirmar";
+  compradorInput.value = (r && r.compradorResponsavel) ? r.compradorResponsavel : "";
+  compradorErro.classList.remove("show");
+  compradorBackdrop.classList.add("open");
+  setTimeout(()=> compradorInput.focus(), 50);
+}
+function fecharComprador(){
+  compradorBackdrop.classList.remove("open");
+  const idAbandonado = idPendenteComprador;
+  const reabrir = reabrirDrawerAposComprador;
+  idPendenteComprador = null;
+  // Troca de status abandonada: não aplica nada; só reabre o drawer se foi de lá que veio.
+  if(idAbandonado && reabrir) abrirDrawer(idAbandonado);
+  else { renderTabela(); renderKanban(); }
+}
+document.getElementById("compradorClose").addEventListener("click", fecharComprador);
+document.getElementById("compradorVoltar").addEventListener("click", fecharComprador);
+compradorBackdrop.addEventListener("click", (e)=>{ if(e.target === compradorBackdrop) fecharComprador(); });
+compradorInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") document.getElementById("compradorConfirmar").click(); });
+document.getElementById("btnAlterarComprador").addEventListener("click", ()=>{
+  if(requisicaoAtualId) abrirComprador(requisicaoAtualId, true, true);
+});
+document.getElementById("compradorConfirmar").addEventListener("click", ()=>{
+  const nome = compradorInput.value.trim();
+  if(!nome){
+    compradorErro.textContent = "Informe o comprador responsável para continuar.";
+    compradorErro.classList.add("show");
+    return;
+  }
+  const r = REQUISICOES.find(x=>x.id===idPendenteComprador);
+  const reabrir = reabrirDrawerAposComprador;
+  if(r){
+    const quem = usuarioAtualNome() || "Não identificado";
+    if(compradorModoEdicao){
+      const anterior = r.compradorResponsavel;
+      if(nome !== anterior){
+        r.compradorResponsavel = nome;
+        r.historico.push({status:r.status, data:new Date(), usuario:quem,
+          motivo:`Comprador responsável alterado${anterior ? " de " + escapeHtml(anterior) : ""} para ${escapeHtml(nome)}.`});
+      }
+    } else {
+      r.compradorResponsavel = nome;
+      r.status = "elaboracao";
+      r.historico.push({status:"elaboracao", data:new Date(), usuario:quem, motivo:`Comprador responsável: ${escapeHtml(nome)}.`});
+    }
+  }
+  compradorBackdrop.classList.remove("open");
+  idPendenteComprador = null;
   if(r){
     renderTabela();
     renderKanban();
