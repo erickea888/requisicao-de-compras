@@ -24,6 +24,7 @@ A comunicação entre o departamento de suprimentos e as equipes que pedem mater
 - **Histórico de alterações** em um modal, com quem mudou o quê e quando (inclui edição de campos).
 - **Notificações dentro da plataforma** (sino com contador): menções e requisições que viraram "Não recebido". A escolha por notificação interna, e não por e-mail, evita custo de envio e mantém tudo no app.
 - **Filtros** por status, origem, prioridade e solicitante, além de tema claro/escuro.
+- **Layout responsivo:** um único arquivo que se adapta à tela. No computador, tabela e gaveta lateral; no celular, lista em cartões, filtros recolhíveis e detalhe em tela cheia.
 
 ## O que ainda é protótipo
 
