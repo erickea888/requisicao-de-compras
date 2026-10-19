@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' blob: data:; media-src blob:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>Requisição de Compras — protótipo</title>
 <style>
   :root{
@@ -605,7 +607,7 @@
             </div>
             <div class="filtro-grupo" style="min-width:200px; flex:1;">
               <label for="filtroBusca">Buscar</label>
-              <input type="text" id="filtroBusca" placeholder="Nº, solicitante, projeto ou anexo">
+              <input type="text" id="filtroBusca" placeholder="Nº, solicitante, comprador, projeto ou anexo">
             </div>
             <button type="button" class="filtro-limpar" id="filtroReqLimpar">Limpar filtros</button>
           </div>
@@ -1217,7 +1219,7 @@ function passaFiltroReq(r){
   if(filtroAtivo.prioridade !== "todas" && r.prioridade !== filtroAtivo.prioridade) return false;
   if(filtroAtivo.solicitante !== "todos" && r.solicitante !== filtroAtivo.solicitante) return false;
   if(filtroAtivo.busca){
-    const alvo = (r.id + " " + r.solicitante + " " + r.projetoNumero + " " + r.projetoNome + " " + (r.anexos||[]).map(a=>a.name).join(" ")).toLowerCase();
+    const alvo = (r.id + " " + r.solicitante + " " + r.projetoNumero + " " + r.projetoNome + " " + (r.compradorResponsavel||"") + " " + (r.anexos||[]).map(a=>a.name).join(" ")).toLowerCase();
     if(!alvo.includes(filtroAtivo.busca.toLowerCase())) return false;
   }
   return true;
@@ -1286,11 +1288,11 @@ function renderTabela(){
     tr.dataset.id = r.id;
     const dataClasse = isAtrasada(r) ? "data-atrasada" : "";
     const tagFaturamento = r.faturamentoDireto ? ` <span class="badge fd">Faturamento direto</span>` : "";
-    const projSubTabela = r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem;
+    const projSubTabela = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
     tr.innerHTML = `
-      <td><b>${r.id}</b><div class="table-subtext">${fmtData(r.data)}</div></td>
-      <td>${r.solicitante}</td>
-      <td><b>${r.projetoNumero}</b><div class="table-subtext">${projSubTabela}${tagFaturamento}</div></td>
+      <td><b>${escapeHtml(r.id)}</b><div class="table-subtext">${fmtData(r.data)}</div></td>
+      <td>${escapeHtml(r.solicitante)}</td>
+      <td><b>${escapeHtml(r.projetoNumero)}</b><div class="table-subtext">${projSubTabela}${tagFaturamento}</div></td>
       <td><span class="badge prio-${r.prioridade}">${PRIORIDADE_LABEL[r.prioridade]}</span></td>
       <td class="${dataClasse}">${fmtDataOpc(r.necessarioAte)}${isAtrasada(r) ? " ⚠" : ""}</td>
       <td><span class="badge st-${r.status}">${STATUS_LABEL[r.status]}</span></td>
@@ -1330,14 +1332,14 @@ function renderKanban(){
         card.className = "kanban-card" + (isAtrasada(r) ? " data-atrasada" : "");
         card.draggable = true;
         card.dataset.id = r.id;
-        const projSub = r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem;
+        const projSub = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
         card.innerHTML = `
           <div class="kc-top">
-            <div class="kc-id">${r.id}</div>
+            <div class="kc-id">${escapeHtml(r.id)}</div>
             <button type="button" class="card-menu-btn" data-id="${r.id}" title="Mais ações">⋮</button>
           </div>
-          <div class="kc-sub">${r.solicitante}</div>
-          <div class="kc-sub"><b>${r.projetoNumero}</b> · ${projSub}</div>
+          <div class="kc-sub">${escapeHtml(r.solicitante)}</div>
+          <div class="kc-sub"><b>${escapeHtml(r.projetoNumero)}</b> · ${projSub}</div>
           <div class="kc-badges">
             <span class="badge prio-${r.prioridade}">${PRIORIDADE_LABEL[r.prioridade]}</span>
             ${isAtrasada(r) ? '<span class="badge atraso">Atrasada</span>' : ''}
@@ -1525,7 +1527,7 @@ function renderNotificacoes(){
   }
   lista.innerHTML = minhas.map(n=>`
     <div class="notif-item ${n.lida ? '' : 'nao-lida'}" data-id="${n.id}" data-req="${n.requisicaoId || ''}">
-      <div class="ni-texto">${n.texto}</div>
+      <div class="ni-texto">${escapeHtml(n.texto)}</div>
       <div class="ni-data">${fmtDataHora(n.data)}</div>
     </div>
   `).join("");
@@ -1604,8 +1606,8 @@ function abrirDrawer(id){
   // Elaboração de pedido, o comprador já está trabalhando em cima do que foi pedido originalmente.
   document.getElementById("btnEditarRequisicao").style.display = r.status === "pendente" ? "" : "none";
   document.getElementById("reqInfoSolicitante").textContent = r.solicitante;
-  const projSub = r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem;
-  document.getElementById("reqInfoProjeto").innerHTML = `<b>${r.projetoNumero}</b><div class="table-subtext">${projSub}</div>`;
+  const projSub = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
+  document.getElementById("reqInfoProjeto").innerHTML = `<b>${escapeHtml(r.projetoNumero)}</b><div class="table-subtext">${projSub}</div>`;
   document.getElementById("reqInfoPrioridade").innerHTML = `<span class="badge prio-${r.prioridade}">${PRIORIDADE_LABEL[r.prioridade]}</span>`;
   const dataEl = document.getElementById("reqInfoData");
   dataEl.textContent = fmtDataOpc(r.necessarioAte) + (isAtrasada(r) ? " (atrasada)" : "");
@@ -1655,7 +1657,7 @@ function abrirDrawer(id){
   if(r.itens && r.itens.length){
     itensWrap.style.display = "";
     document.getElementById("reqInfoItens").innerHTML = r.itens.map(i=>
-      `<tr><td>${i.descricao}</td><td>${i.modelo || "—"}</td><td>${i.quantidade}</td></tr>`
+      `<tr><td>${escapeHtml(i.descricao)}</td><td>${escapeHtml(i.modelo || "—")}</td><td>${escapeHtml(i.quantidade)}</td></tr>`
     ).join("");
   } else {
     itensWrap.style.display = "none";
@@ -1721,7 +1723,13 @@ document.getElementById("comentarioFoto").addEventListener("change", (e)=>{
 });
 
 function escapeHtml(str){
-  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return String(str == null ? "" : str)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+// Só aceita links que o próprio app gerou (blob: de arquivo local). Qualquer outra coisa vira "#".
+function urlSegura(u){
+  return (typeof u === "string" && /^(blob:|#)/.test(u)) ? u : "#";
 }
 function iniciaisNome(nome){
   return nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0]).join("").toUpperCase();
@@ -1730,7 +1738,7 @@ function destacarMencoes(texto){
   let out = escapeHtml(texto);
   PESSOAS_PLATAFORMA.forEach(nome=>{
     const re = new RegExp("@" + nome.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), "g");
-    out = out.replace(re, `<span class="mencao">@${nome}</span>`);
+    out = out.replace(re, `<span class="mencao">@${escapeHtml(nome)}</span>`);
   });
   return out;
 }
@@ -1745,7 +1753,7 @@ function renderComentarios(r){
       ? `<div class="comentario-anexos">${c.anexos.map(a=> renderAnexoLink(a)).join("")}</div>`
       : "";
     return `<div class="comentario-item">
-      <div class="comentario-avatar">${iniciaisNome(c.autor)}</div>
+      <div class="comentario-avatar">${escapeHtml(iniciaisNome(c.autor))}</div>
       <div class="comentario-corpo">
         <div class="comentario-cabecalho"><span class="comentario-autor">${escapeHtml(c.autor)}</span><span class="comentario-data">${fmtData(c.data)}</span></div>
         ${c.texto ? `<div class="comentario-texto">${destacarMencoes(c.texto)}</div>` : ""}
@@ -1782,7 +1790,7 @@ function atualizarMencaoDropdown(){
   const candidatos = PESSOAS_PLATAFORMA.filter(nome=> nome.toLowerCase().includes(termo));
   if(!candidatos.length){ fecharMencaoDropdown(); return; }
   mencaoAtiva = true;
-  mencaoDropdown.innerHTML = candidatos.map(nome=>`<div class="mencao-opcao" data-nome="${nome}">${nome}</div>`).join("");
+  mencaoDropdown.innerHTML = candidatos.map(nome=>`<div class="mencao-opcao" data-nome="${escapeHtml(nome)}">${escapeHtml(nome)}</div>`).join("");
   mencaoDropdown.style.display = "block";
   mencaoDropdown.querySelectorAll(".mencao-opcao").forEach(op=>{
     op.addEventListener("mousedown", (e)=>{
@@ -1931,7 +1939,7 @@ document.getElementById("dataEntregaConfirmar").addEventListener("click", ()=>{
       const entradaEnvio = {status:"enviado", data:new Date(), usuario: usuarioAtualNome() || "Não identificado"};
       if(pedeComprador){
         r.compradorResponsavel = nomeComprador;
-        entradaEnvio.motivo = `Comprador responsável: ${escapeHtml(nomeComprador)}.`;
+        entradaEnvio.motivo = `Comprador responsável: ${nomeComprador}.`;
       }
       r.historico.push(entradaEnvio);
     } else {
@@ -1987,8 +1995,8 @@ function abrirHistorico(id){
       const titulo = h.edicao ? 'Dados editados <span class="badge automatico">edição</span>' : `${STATUS_LABEL[h.status]}${h.automatico ? ' <span class="badge automatico">automático</span>' : ''}`;
       return `<li>
         <div class="rh-topo"><span>${titulo}</span><span>${fmtDataHora(h.data)}</span></div>
-        <div class="rh-meta"><span>Por: ${quem}</span></div>
-        ${h.motivo ? `<div class="rh-motivo">${h.motivo}</div>` : ""}
+        <div class="rh-meta"><span>Por: ${escapeHtml(quem)}</span></div>
+        ${h.motivo ? `<div class="rh-motivo">${escapeHtml(h.motivo)}</div>` : ""}
       </li>`;
     }).join("");
   }
@@ -2111,12 +2119,12 @@ document.getElementById("compradorConfirmar").addEventListener("click", ()=>{
       if(nome !== anterior){
         r.compradorResponsavel = nome;
         r.historico.push({status:r.status, data:new Date(), usuario:quem,
-          motivo:`Comprador responsável alterado${anterior ? " de " + escapeHtml(anterior) : ""} para ${escapeHtml(nome)}.`});
+          motivo:`Comprador responsável alterado${anterior ? " de " + anterior : ""} para ${nome}.`});
       }
     } else {
       r.compradorResponsavel = nome;
       r.status = "elaboracao";
-      r.historico.push({status:"elaboracao", data:new Date(), usuario:quem, motivo:`Comprador responsável: ${escapeHtml(nome)}.`});
+      r.historico.push({status:"elaboracao", data:new Date(), usuario:quem, motivo:`Comprador responsável: ${nome}.`});
     }
   }
   compradorBackdrop.classList.remove("open");
@@ -2150,6 +2158,14 @@ document.getElementById("btnFiltrosMobile").addEventListener("click", ()=>{
 ["change","input","click"].forEach(ev=>{
   document.querySelector(".filtro-toolbar").addEventListener(ev, ()=> setTimeout(atualizarContagemFiltros, 0));
 });
+
+// ---------- LIMITES DE TAMANHO DOS CAMPOS ----------
+// Evita textos gigantes (que travam a tela ou enchem o banco quando houver backend).
+(function(){
+  const limites = {fSolicitante:80, fProjeto:40, fObs:1000, comentarioTexto:1000, comentarioAutor:80,
+                   compradorInput:80, dataEntregaComprador:80, perfilNomeInput:80, motivoCancelTexto:500};
+  Object.keys(limites).forEach(id=>{ const el = document.getElementById(id); if(el) el.maxLength = limites[id]; });
+})();
 
 // ---------- TRAVA DE ROLAGEM (celular) ----------
 // Com o detalhe ou uma janela aberta, a página de trás fica parada; só o conteúdo da janela rola.
@@ -2209,7 +2225,7 @@ const filtroBuscaEl = document.getElementById("filtroBusca");
 function atualizarOpcoesFiltroSolicitante(){
   const selecionadoAntes = filtroSolicitanteReqEl.value || "todos";
   const nomes = [...new Set(REQUISICOES.map(r=>r.solicitante))].sort((a,b)=> a.localeCompare(b, "pt-BR"));
-  filtroSolicitanteReqEl.innerHTML = `<option value="todos">Todos</option>` + nomes.map(n=>`<option value="${n}">${n}</option>`).join("");
+  filtroSolicitanteReqEl.innerHTML = `<option value="todos">Todos</option>` + nomes.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
   filtroSolicitanteReqEl.value = nomes.includes(selecionadoAntes) ? selecionadoAntes : "todos";
   filtroAtivo.solicitante = filtroSolicitanteReqEl.value;
 }
@@ -2265,7 +2281,7 @@ function renderListaAnexos(containerEl, arquivos, aoAlterar){
     const thumbUrl = ehFoto ? (f.url || (f._previewUrl || (f._previewUrl = criarUrlAnexo(f)))) : "";
     const tamanhoTexto = typeof f.size === "number" ? fmtTamanho(f.size) : "já enviado";
     return `<li class="${grande ? 'anexo-erro' : ''}" data-idx="${i}">
-      <span class="anexo-nome">${thumbUrl ? `<img class="anexo-thumb" src="${thumbUrl}" alt="">` : `<span>${ehFoto ? '📷' : '📎'}</span>`}<span class="anexo-nome-texto">${f.name}</span></span>
+      <span class="anexo-nome">${thumbUrl ? `<img class="anexo-thumb" src="${escapeHtml(urlSegura(thumbUrl))}" alt="">` : `<span>${ehFoto ? '📷' : '📎'}</span>`}<span class="anexo-nome-texto">${escapeHtml(f.name)}</span></span>
       <span class="anexo-direita">
         <span class="tam">${tamanhoTexto}${grande ? ' — acima do limite' : ''}</span>
         <button type="button" class="anexo-remover" data-idx="${i}" title="Remover este arquivo">✕</button>
@@ -2283,17 +2299,27 @@ function renderListaAnexos(containerEl, arquivos, aoAlterar){
 // é uma foto, pra dar pra reconhecer o item de relance sem precisar clicar/baixar.
 function renderAnexoLink(a){
   const ehFoto = a.type && a.type.startsWith("image/");
-  const miniatura = ehFoto ? `<img class="anexo-thumb anexo-thumb-lg" src="${a.url}" alt="">` : "📎";
-  return `<a class="anexo-link" href="${a.url}" download="${a.name}" target="_blank" rel="noopener">${miniatura} ${a.name}</a>`;
+  const miniatura = ehFoto ? `<img class="anexo-thumb anexo-thumb-lg" src="${escapeHtml(urlSegura(a.url))}" alt="">` : "📎";
+  return `<a class="anexo-link" href="${escapeHtml(urlSegura(a.url))}" download="${escapeHtml(a.name)}" target="_blank" rel="noopener noreferrer">${miniatura} ${escapeHtml(a.name)}</a>`;
+}
+// O atributo "accept" do <input> é só uma dica da interface — não impede nada. Por isso a lista de
+// extensões permitidas é conferida aqui também (bloqueia .html, .svg, .js, .exe etc.).
+const EXT_PERMITIDAS = ["pdf","xls","xlsx","doc","docx","png","jpg","jpeg","webp","heic","heif"];
+function extensaoPermitida(arquivo){
+  const m = /\.([a-z0-9]+)$/i.exec((arquivo && arquivo.name) || "");
+  return !!m && EXT_PERMITIDAS.includes(m[1].toLowerCase());
 }
 function mesclarArquivosSelecionados(inputEl, arrayDestino){
   // Seleção é cumulativa: arquivos (ou fotos) escolhidos numa nova rodada se somam aos já
   // anexados (em vez de substituir), evitando perder o que já tinha sido selecionado — e os dois
   // campos (anexo e foto) alimentam a mesma listinha/validação.
+  const recusados = [];
   [...inputEl.files].forEach(f=>{
+    if(!extensaoPermitida(f)){ recusados.push(f.name); return; }
     const jaExiste = arrayDestino.some(a=> a.name === f.name && a.size === f.size);
     if(!jaExiste) arrayDestino.push(f);
   });
+  if(recusados.length) alert("Tipo de arquivo não permitido: " + recusados.join(", ") + ". Use PDF, Excel, Word ou imagem (PNG/JPG).");
   inputEl.value = "";
 }
 
@@ -2416,11 +2442,11 @@ function criarLinhaItem(preset){
   row.className = "item-row";
   row.innerHTML = `
     <div class="item-row-top">
-      <input type="text" class="item-descricao" placeholder="Descrição do item">
+      <input type="text" class="item-descricao" placeholder="Descrição do item" maxlength="120">
       <button type="button" class="item-remover" title="Remover">✕</button>
     </div>
     <div class="item-row-grid">
-      <div><p class="item-campo-rot">Modelo</p><input type="text" class="item-modelo" placeholder="opcional"></div>
+      <div><p class="item-campo-rot">Modelo</p><input type="text" class="item-modelo" placeholder="opcional" maxlength="80"></div>
       <div><p class="item-campo-rot">Quantidade</p><input type="number" class="item-qtd" placeholder="Qtd." min="1"></div>
     </div>
   `;

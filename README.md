@@ -44,6 +44,10 @@ A lógica de permissão já está isolada em funções (como `podeAlterarRecebim
 - **Dados de exemplo determinísticos** (sem sorteio), para a demonstração ser idêntica a cada carregamento.
 - **Interações consistentes:** o mesmo padrão de menu de ações, confirmações e modais em toda a tela.
 
+## Segurança
+
+O protótipo passou por uma revisão de segurança (XSS, anexos, política de conteúdo). Os achados, o que foi corrigido e o checklist para a implantação real estão em [SEGURANCA.md](SEGURANCA.md).
+
 ## Como rodar
 
 Baixe o `index.html` e abra no navegador. Não há instalação.
@@ -52,6 +56,7 @@ Baixe o `index.html` e abra no navegador. Não há instalação.
 
 - Login e banco de dados reais (Firebase).
 - Perfis e permissões por setor.
+- Filtros salvos por usuário (por exemplo, "minhas compras" e "minhas requisições"), gravados na conta de cada pessoa.
 - Integração com o módulo de Entregas e Retiradas para ligar uma compra à logística de retirada.
 - Relatórios: tempo médio por etapa e requisições atrasadas por solicitante.
 
