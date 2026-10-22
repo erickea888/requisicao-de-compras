@@ -253,6 +253,8 @@
   .link-editar:hover{text-decoration:underline;}
   .req-obs{background:var(--panel-2); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:18px; white-space:pre-wrap;}
   .req-section-title{font-size:12.5px; font-weight:700; margin:0 0 8px;}
+  .req-section-head{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 8px;}
+  .req-section-head .req-section-title{margin:0;}
   .req-status-row{display:flex; align-items:center; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); flex-wrap:wrap;}
   .req-status-row select{
     padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);
@@ -422,7 +424,7 @@
     thead, colgroup{display:none;}
     tbody tr.req-row{
       display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:6px 8px;
-      grid-template-areas:"id status menu" "sol sol sol" "proj proj proj" "prio prio data";
+      grid-template-areas:"id status menu" "sol sol sol" "proj proj proj" "prio prio prio";
       border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--panel);
     }
     tbody tr.req-row:last-child{margin-bottom:0;}
@@ -431,9 +433,7 @@
     tbody tr.req-row td:nth-child(2){grid-area:sol; font-weight:600; font-size:13px;}
     tbody tr.req-row td:nth-child(3){grid-area:proj;}
     tbody tr.req-row td:nth-child(4){grid-area:prio;}
-    tbody tr.req-row td:nth-child(5){grid-area:data; text-align:right; font-size:12px;}
-    tbody tr.req-row td:nth-child(5)::before{content:"até "; font-weight:400; color:var(--muted);}
-    tbody tr.req-row td:nth-child(6){grid-area:status;}
+    tbody tr.req-row td:nth-child(5){grid-area:status;}
     tbody tr.req-row td.td-menu{grid-area:menu; padding:0 !important;}
     tbody tr.req-row.linha-kpi-destaque{box-shadow:inset 3px 0 0 var(--accent);}
     tbody tr.req-row.linha-kpi-destaque td:first-child{box-shadow:none;}
@@ -614,7 +614,6 @@
           <div class="ordenar-mobile" id="ordenarMobileWrap">
             <select id="ordenarMobile" aria-label="Ordenar por">
               <option value="">Ordenar: padrão</option>
-              <option value="necessario">Necessário até</option>
               <option value="prioridade">Prioridade</option>
               <option value="status">Status</option>
               <option value="solicitante">Solicitante</option>
@@ -627,8 +626,8 @@
           <div class="table-scroll" id="tabelaWrap">
             <table>
               <colgroup>
-                <col style="width:13%"><col style="width:13%"><col style="width:24%">
-                <col style="width:9%"><col style="width:15%"><col style="width:18%"><col style="width:8%">
+                <col style="width:14%"><col style="width:17%"><col style="width:28%">
+                <col style="width:12%"><col style="width:20%"><col style="width:9%">
               </colgroup>
               <thead>
                 <tr>
@@ -636,7 +635,6 @@
                   <th class="th-ordenavel" data-campo="solicitante">Solicitante<span class="seta-ordenacao"></span></th>
                   <th class="th-ordenavel" data-campo="projeto">Nº do projeto<span class="seta-ordenacao"></span></th>
                   <th class="th-ordenavel" data-campo="prioridade">Prioridade<span class="seta-ordenacao"></span></th>
-                  <th class="th-ordenavel" data-campo="necessario">Necessário até<span class="seta-ordenacao"></span></th>
                   <th class="th-ordenavel" data-campo="status">Status<span class="seta-ordenacao"></span></th>
                   <th></th>
                 </tr>
@@ -671,7 +669,6 @@
       <div class="req-info-item"><div class="rot">Solicitante</div><div class="val" id="reqInfoSolicitante"></div></div>
       <div class="req-info-item"><div class="rot">Nº do projeto</div><div class="val" id="reqInfoProjeto"></div></div>
       <div class="req-info-item"><div class="rot">Prioridade</div><div class="val" id="reqInfoPrioridade"></div></div>
-      <div class="req-info-item"><div class="rot">Necessário até</div><div class="val" id="reqInfoData"></div></div>
       <div class="req-info-item" id="reqInfoEntregaWrap" style="display:none;">
         <div class="rot">Entrega prevista</div>
         <div class="val" id="reqInfoEntrega"></div>
@@ -685,7 +682,7 @@
       <div class="req-obs" id="reqInfoObs"></div>
     </div>
     <div id="reqInfoItensWrap" style="display:none;">
-      <p class="req-section-title">Itens informados</p>
+      <div class="req-section-head"><p class="req-section-title">Itens informados</p><button type="button" class="req-btn" id="btnBaixarItens" title="Baixar a lista de itens em Excel para enviar ao fornecedor">⬇ Baixar planilha (.xlsx)</button></div>
       <table>
         <thead><tr><th>Descrição</th><th>Modelo</th><th>Quantidade</th></tr></thead>
         <tbody id="reqInfoItens"></tbody>
@@ -1057,8 +1054,8 @@ function criarNotificacao(paraNome, texto, requisicaoId){
 }
 
 function isFinalizada(status){ return status === "recebido" || status === "cancelado"; }
-// Não coletamos mais "Necessário até" na criação da requisição, então "atrasada" deixou de ser sobre
-// essa data e passou a significar exatamente "caiu em Não recebido" — ou seja, passou do prazo de
+// A urgência é dada só pela Prioridade (não há campo de prazo no pedido), então "atrasada" significa
+// exatamente "caiu em Não recebido" — ou seja, passou do prazo de
 // entrega combinado com o fornecedor e ninguém confirmou o recebimento ainda.
 function isAtrasada(r){
   return r.status === "nao_recebido";
@@ -1158,7 +1155,6 @@ const COMPRADOR_SEED = "Erick Rodrigues";
     const projeto = projetos[def.projetoIdx % projetos.length];
     const solicitante = SOLICITANTES_SEED[def.solicitanteIdx % SOLICITANTES_SEED.length];
     const data = new Date(hoje.getTime() - def.diasCriacao*86400000);
-    const necessarioAte = new Date(hoje.getTime() + def.diasNecessario*86400000);
     const dataPrevistaEntrega = (typeof def.diasPrevistaEntrega === "number")
       ? new Date(hoje.getTime() + def.diasPrevistaEntrega*86400000)
       : null;
@@ -1186,7 +1182,7 @@ const COMPRADOR_SEED = "Erick Rodrigues";
       id: novoId(),
       data, solicitante, origem: def.origem,
       projetoNumero: projeto.numero, projetoNome: projeto.nome,
-      prioridade: def.prioridade, necessarioAte,
+      prioridade: def.prioridade,
       dataPrevistaEntrega,
       observacao: OBSERVACOES_SEED[def.obsIdx % OBSERVACOES_SEED.length],
       anexos: def.anexosIdx.map(i=>criarAnexoFalso(ANEXOS_SEED[i % ANEXOS_SEED.length])),
@@ -1233,7 +1229,6 @@ const ORDENACAO_ACESSOR = {
   solicitante: r=> (r.solicitante||"").toLowerCase(),
   projeto: r=> (r.projetoNumero||"").toLowerCase(),
   prioridade: r=> PRIORIDADE_RANK[r.prioridade] ?? 0,
-  necessario: r=> r.necessarioAte ? new Date(r.necessarioAte).getTime() : Infinity, // sem data vai pro fim
   status: r=> STATUS_ORDEM.indexOf(r.status),
 };
 function ordenarLista(lista){
@@ -1279,14 +1274,13 @@ function renderTabela(){
   atualizarCabecalhoOrdenacao();
   tabelaBody.innerHTML = "";
   if(lista.length === 0){
-    tabelaBody.innerHTML = `<tr class="table-empty"><td colspan="7">Nenhuma requisição encontrada para os filtros selecionados.</td></tr>`;
+    tabelaBody.innerHTML = `<tr class="table-empty"><td colspan="6">Nenhuma requisição encontrada para os filtros selecionados.</td></tr>`;
     return;
   }
   lista.forEach(r=>{
     const tr = document.createElement("tr");
     tr.className = "req-row";
     tr.dataset.id = r.id;
-    const dataClasse = isAtrasada(r) ? "data-atrasada" : "";
     const tagFaturamento = r.faturamentoDireto ? ` <span class="badge fd">Faturamento direto</span>` : "";
     const projSubTabela = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
     tr.innerHTML = `
@@ -1294,7 +1288,6 @@ function renderTabela(){
       <td>${escapeHtml(r.solicitante)}</td>
       <td><b>${escapeHtml(r.projetoNumero)}</b><div class="table-subtext">${projSubTabela}${tagFaturamento}</div></td>
       <td><span class="badge prio-${r.prioridade}">${PRIORIDADE_LABEL[r.prioridade]}</span></td>
-      <td class="${dataClasse}">${fmtDataOpc(r.necessarioAte)}${isAtrasada(r) ? " ⚠" : ""}</td>
       <td><span class="badge st-${r.status}">${STATUS_LABEL[r.status]}</span></td>
       <td class="td-menu"><button type="button" class="card-menu-btn" data-id="${r.id}" title="Mais ações">⋮</button></td>
     `;
@@ -1609,9 +1602,6 @@ function abrirDrawer(id){
   const projSub = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
   document.getElementById("reqInfoProjeto").innerHTML = `<b>${escapeHtml(r.projetoNumero)}</b><div class="table-subtext">${projSub}</div>`;
   document.getElementById("reqInfoPrioridade").innerHTML = `<span class="badge prio-${r.prioridade}">${PRIORIDADE_LABEL[r.prioridade]}</span>`;
-  const dataEl = document.getElementById("reqInfoData");
-  dataEl.textContent = fmtDataOpc(r.necessarioAte) + (isAtrasada(r) ? " (atrasada)" : "");
-  dataEl.className = "val" + (isAtrasada(r) ? " data-atrasada" : "");
 
   const entregaWrap = document.getElementById("reqInfoEntregaWrap");
   const btnEditarEntrega = document.getElementById("btnEditarEntrega");
@@ -2159,6 +2149,96 @@ document.getElementById("btnFiltrosMobile").addEventListener("click", ()=>{
   document.querySelector(".filtro-toolbar").addEventListener(ev, ()=> setTimeout(atualizarContagemFiltros, 0));
 });
 
+// ---------- PLANILHA DE ITENS (.xlsx) ----------
+// Gera uma planilha Excel com os itens da requisição (descrição, modelo e quantidade), pra quem vai
+// comprar (ou o solicitante) enviar ao fornecedor sem precisar copiar e colar. Não usa biblioteca
+// externa: o .xlsx é um zip de arquivos XML, montado aqui mesmo (sem compressão). Dados internos
+// (solicitante, projeto, faturamento direto) ficam de fora de propósito.
+const CRC_TABELA = (function(){
+  const t = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes){
+  let crc = 0xFFFFFFFF;
+  for(let i = 0; i < bytes.length; i++) crc = CRC_TABELA[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function montarZip(arquivos){
+  const enc = new TextEncoder();
+  const locais = [], centrais = [];
+  let deslocamento = 0;
+  arquivos.forEach(a=>{
+    const nome = enc.encode(a.nome), dados = enc.encode(a.conteudo), crc = crc32(dados);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(8, 0, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, dados.length, true); lh.setUint32(22, dados.length, true);
+    lh.setUint16(26, nome.length, true); lh.setUint16(28, 0, true);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, dados.length, true); ch.setUint32(24, dados.length, true);
+    ch.setUint16(28, nome.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true);
+    ch.setUint16(34, 0, true); ch.setUint16(36, 0, true); ch.setUint32(38, 0, true); ch.setUint32(42, deslocamento, true);
+    locais.push(new Uint8Array(lh.buffer), nome, dados);
+    centrais.push(new Uint8Array(ch.buffer), nome);
+    deslocamento += 30 + nome.length + dados.length;
+  });
+  const tamCentral = centrais.reduce((t,p)=> t + p.length, 0);
+  const fim = new DataView(new ArrayBuffer(22));
+  fim.setUint32(0, 0x06054b50, true); fim.setUint16(8, arquivos.length, true); fim.setUint16(10, arquivos.length, true);
+  fim.setUint32(12, tamCentral, true); fim.setUint32(16, deslocamento, true);
+  return new Blob([...locais, ...centrais, new Uint8Array(fim.buffer)],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xmlTexto(v){
+  return escapeHtml(v).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+}
+function celulaTexto(ref, valor, estilo){
+  return '<c r="' + ref + '" t="inlineStr"' + (estilo ? ' s="' + estilo + '"' : '') + '><is><t xml:space="preserve">' + xmlTexto(valor) + '</t></is></c>';
+}
+function gerarXlsxItens(r){
+  const linhas = ['<row r="1">' + celulaTexto("A1","Item",1) + celulaTexto("B1","Descrição",1) + celulaTexto("C1","Modelo",1) + celulaTexto("D1","Quantidade",1) + '</row>'];
+  (r.itens || []).forEach((i, idx)=>{
+    const n = idx + 2;
+    const qtd = Number(i.quantidade);
+    linhas.push('<row r="' + n + '"><c r="A' + n + '"><v>' + (idx + 1) + '</v></c>'
+      + celulaTexto("B" + n, i.descricao || "")
+      + celulaTexto("C" + n, i.modelo || "")
+      + (isFinite(qtd) && i.quantidade !== "" && i.quantidade != null
+          ? '<c r="D' + n + '"><v>' + qtd + '</v></c>'
+          : celulaTexto("D" + n, i.quantidade || ""))
+      + '</row>');
+  });
+  const cab = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  return montarZip([
+    {nome:"[Content_Types].xml", conteudo: cab + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {nome:"_rels/.rels", conteudo: cab + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {nome:"xl/workbook.xml", conteudo: cab + '<workbook xmlns="' + ns + '" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Itens" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+    {nome:"xl/_rels/workbook.xml.rels", conteudo: cab + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {nome:"xl/styles.xml", conteudo: cab + '<styleSheet xmlns="' + ns + '"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
+    {nome:"xl/worksheets/sheet1.xml", conteudo: cab + '<worksheet xmlns="' + ns + '"><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="55" customWidth="1"/><col min="3" max="3" width="28" customWidth="1"/><col min="4" max="4" width="14" customWidth="1"/></cols><sheetData>' + linhas.join("") + '</sheetData></worksheet>'},
+  ]);
+}
+document.getElementById("btnBaixarItens").addEventListener("click", ()=>{
+  const r = REQUISICOES.find(x=>x.id===requisicaoAtualId);
+  if(!r || !r.itens || !r.itens.length) return;
+  const url = URL.createObjectURL(gerarXlsxItens(r));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = r.id + "-itens.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+});
+
 // ---------- LIMITES DE TAMANHO DOS CAMPOS ----------
 // Evita textos gigantes (que travam a tela ou enchem o banco quando houver backend).
 (function(){
@@ -2580,7 +2660,7 @@ document.getElementById("duplicarSim").addEventListener("click", ()=>{
     id: novoId(), data: new Date(),
     solicitante: original.solicitante, origem: original.origem,
     projetoNumero: original.projetoNumero, projetoNome: original.projetoNome,
-    prioridade: original.prioridade, necessarioAte: null,
+    prioridade: original.prioridade,
     observacao: original.observacao,
     anexos: [], // de propósito: cada compra deve levar seu próprio anexo/orçamento atualizado
     faturamentoDireto: original.faturamentoDireto,
@@ -2757,7 +2837,7 @@ document.getElementById("modalCriar").addEventListener("click", ()=>{
   const nova = {
     id: novoId(), data: new Date(), solicitante, origem,
     projetoNumero, projetoNome: projetoInfo ? projetoInfo.nome : "",
-    prioridade, necessarioAte: null, observacao,
+    prioridade, observacao,
     anexos: anexosFinal,
     faturamentoDireto,
     motivoCancelamento:"",
