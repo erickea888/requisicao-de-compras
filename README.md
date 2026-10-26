@@ -15,12 +15,14 @@ A comunicação entre o departamento de suprimentos e as equipes que pedem mater
 - **Abertura de requisição** com solicitante, origem (Obras, Manutenção, Administração), nº do projeto (texto livre), prioridade, itens, observação e faturamento direto.
 - **Itens rápidos** para os materiais mais comuns e **anexos múltiplos** (documentos e fotos, inclusive tirando a foto pela câmera), com limite de tamanho por arquivo e miniaturas.
 - **Planilha de itens (.xlsx):** botão no detalhe da requisição que baixa os itens (descrição, modelo e quantidade) em Excel, para enviar ao fornecedor sem copiar e colar. Dados internos (solicitante, projeto, faturamento direto) não vão na planilha.
-- **Fluxo de status:** Pendente → Elaboração de pedido → Enviado → Recebido / Não recebido, além de Cancelado (com motivo obrigatório).
+- **Fluxo de status:** Pendente → Elaboração de pedido → Enviado → Recebido parcial / Recebido / Não recebido, além de Cancelado (com motivo obrigatório).
+- **Transições controladas:** cada status só avança para os próximos permitidos (no detalhe e no Kanban). Não dá para pular de Pendente para Recebido, Recebido é a etapa final e uma requisição cancelada só volta para Pendente com motivo de reabertura registrado no histórico.
+- **Recebimento parcial:** quem pediu informa quanto já chegou de cada item. O detalhe mostra o recebido e o que falta; quando tudo chega, a requisição vai sozinha para Recebido.
 - **Comprador responsável:** ao mover para Elaboração de pedido, quem assume a compra informa seu nome (obrigatório). Ele aparece no topo da requisição, com opção de alterar, e fica registrado no histórico.
 - **Regra de permissão:** só quem pediu, ou um gestor, pode marcar Recebido / Não recebido, porque é quem sabe se a mercadoria chegou. Se o prazo de entrega vence sem confirmação, a requisição passa sozinha para "Não recebido" e o solicitante é avisado.
 - **Data de entrega prevista** editável a qualquer momento.
 - **Duas visões:** tabela (colunas ordenáveis) e Kanban com arrastar e soltar.
-- **Comentários** na requisição, com texto, anexo ou foto e **@menção**.
+- **Comentários** na requisição, com texto, anexo ou foto e **@menção**. O autor é sempre o usuário definido em 👤, o mesmo usado nas permissões e no histórico.
 - **Edição** enquanto a requisição está Pendente, **duplicar** com confirmação e **exclusão** pelo menu "⋮" de cada linha ou card.
 - **Histórico de alterações** em um modal, com quem mudou o quê e quando (inclui edição de campos).
 - **Notificações dentro da plataforma** (sino com contador): menções e requisições que viraram "Não recebido". A escolha por notificação interna, e não por e-mail, evita custo de envio e mantém tudo no app.
@@ -59,6 +61,8 @@ Baixe o `index.html` e abra no navegador. Não há instalação.
 - Perfis e permissões por setor.
 - Filtros salvos por usuário (por exemplo, "minhas compras" e "minhas requisições"), gravados na conta de cada pessoa.
 - Integração com o módulo de Entregas e Retiradas para ligar uma compra à logística de retirada.
+- **Integração com o OMIE (via `omie-automation`):** quando o pedido de compra for criado no OMIE, o nº do pedido e o status voltam sozinhos para a requisição.
+- **Separar o arquivo único** em HTML, CSS e JS ao entrar o Firebase: facilita a manutenção e permite uma CSP sem `'unsafe-inline'` (ver [SEGURANCA.md](SEGURANCA.md), achado 7).
 - Relatórios: tempo médio por etapa e requisições atrasadas por solicitante.
 
 ## Autor

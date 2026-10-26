@@ -152,6 +152,7 @@
   .badge.st-pendente{background:rgba(245,158,11,.15); color:var(--warn);}
   .badge.st-elaboracao{background:rgba(139,92,246,.15); color:var(--roxo);}
   .badge.st-enviado{background:rgba(59,130,246,.15); color:var(--accent);}
+  .badge.st-recebido_parcial{background:rgba(20,184,166,.15); color:#0d9488;}
   .badge.st-recebido{background:rgba(34,197,94,.15); color:var(--accent-2);}
   .badge.st-nao_recebido{background:rgba(239,68,68,.15); color:var(--danger);}
   .badge.st-cancelado{background:rgba(239,68,68,.15); color:var(--danger);}
@@ -289,7 +290,8 @@
   .comentario-anexos{margin-top:6px; display:flex; flex-direction:column; gap:2px;}
 
   .comentario-compositor{border-top:1px solid var(--border); padding-top:12px;}
-  .comentario-autor-input{width:180px; margin-bottom:6px; padding:6px 9px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text); font-size:11.5px; font-family:inherit;}
+  .comentario-identidade{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
+  .comentario-identidade .link-editar{display:inline; margin:0; font-size:11.5px;}
   .comentario-mencao-wrap{position:relative;}
   .comentario-mencao-wrap textarea{width:100%; min-height:56px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text); font-size:12.5px; font-family:inherit; resize:vertical;}
   .mencao-dropdown{position:absolute; left:0; right:0; top:100%; margin-top:4px; background:var(--panel); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.16); max-height:160px; overflow-y:auto; z-index:5;}
@@ -348,6 +350,17 @@
   .anexo-links-coluna{display:flex; flex-direction:column; gap:5px;}
   .btn-perigo{background:var(--danger) !important;}
   .form-erro{color:var(--danger); font-size:12px; margin:0 0 10px; display:none;}
+
+  .recebimento-tabela{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .recebimento-tabela th{text-align:left; font-size:11px; color:var(--muted); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--border);}
+  .recebimento-tabela td{padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  .recebimento-tabela input{width:90px;}
+  .recebido-falta{color:var(--warn); font-weight:600;}
+  .recebido-ok{color:var(--accent-2); font-weight:600;}
+
+  .aviso-toast{position:fixed; left:50%; bottom:24px; transform:translate(-50%, 20px); max-width:min(520px, calc(100vw - 32px)); background:var(--panel); color:var(--text); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13px; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,.18); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:2000; cursor:pointer;}
+  .aviso-toast.open{opacity:1; transform:translate(-50%, 0); pointer-events:auto;}
+  .aviso-toast.erro{border-left-color:var(--danger);}
   .form-erro.show{display:block;}
 
   .itens-lista{display:flex; flex-direction:column; gap:10px; margin:8px 0;}
@@ -457,7 +470,6 @@
     .req-status-row{gap:8px;}
     .req-status-row select{flex:1 1 100%; min-height:44px; font-size:16px;}
     .req-status-row .req-btn{flex:1 1 40%;}
-    .comentario-autor-input{width:100%; min-height:40px; font-size:16px;}
     .comentario-mencao-wrap textarea{font-size:16px;}
     .comentario-anexo-btn{width:44px; height:44px;}
 
@@ -575,6 +587,7 @@
                 <option value="pendente">Pendente</option>
                 <option value="elaboracao">Elaboração de pedido</option>
                 <option value="enviado">Enviado</option>
+                <option value="recebido_parcial">Recebido parcial</option>
                 <option value="recebido">Recebido</option>
                 <option value="nao_recebido">Não recebido</option>
                 <option value="cancelado">Cancelado</option>
@@ -684,7 +697,7 @@
     <div id="reqInfoItensWrap" style="display:none;">
       <div class="req-section-head"><p class="req-section-title">Itens informados</p><button type="button" class="req-btn" id="btnBaixarItens" title="Baixar a lista de itens em Excel para enviar ao fornecedor">⬇ Baixar planilha (.xlsx)</button></div>
       <table>
-        <thead><tr><th>Descrição</th><th>Modelo</th><th>Quantidade</th></tr></thead>
+        <thead><tr><th>Descrição</th><th>Modelo</th><th>Quantidade</th><th id="reqInfoItensColRecebido" style="display:none;">Recebido</th></tr></thead>
         <tbody id="reqInfoItens"></tbody>
       </table>
     </div>
@@ -709,7 +722,7 @@
     <div class="comentarios-lista" id="comentariosLista"></div>
     <div class="comentario-compositor">
       <p class="form-erro" id="comentarioErro"></p>
-      <input type="text" id="comentarioAutor" class="comentario-autor-input" placeholder="Seu nome">
+      <div class="comentario-identidade" id="comentarioIdentidade"></div>
       <div class="comentario-mencao-wrap">
         <textarea id="comentarioTexto" placeholder="Escreva um comentário... use @ para marcar alguém cadastrado"></textarea>
         <div class="mencao-dropdown" id="mencaoDropdown" style="display:none;"></div>
@@ -867,11 +880,12 @@
 <div class="modal-backdrop" id="motivoCancelBackdrop">
   <div class="modal" style="max-width:420px;">
     <div class="modal-header">
-      <h3>Motivo do cancelamento</h3>
+      <h3 id="motivoCancelTitulo">Motivo do cancelamento</h3>
       <button type="button" class="modal-close" id="motivoCancelClose">✕</button>
     </div>
     <div class="modal-body">
       <p class="form-erro" id="motivoCancelErro"></p>
+      <p class="form-hint" id="motivoCancelDica" style="display:none; margin-bottom:10px;">A requisição volta para Pendente e segue o fluxo normal: o comprador assume de novo em Elaboração de pedido.</p>
       <div class="form-field full">
         <label for="motivoCancelTexto">Descreva o motivo *</label>
         <textarea id="motivoCancelTexto" placeholder="Explique por que esta requisição está sendo cancelada..."></textarea>
@@ -931,6 +945,35 @@
     </div>
   </div>
 </div>
+
+<div class="modal-backdrop" id="recebimentoBackdrop">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3 id="recebimentoTitulo">Registrar recebimento parcial</h3>
+      <button type="button" class="modal-close" id="recebimentoClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-erro" id="recebimentoErro"></p>
+      <div id="recebimentoItensWrap">
+        <p class="form-hint" style="margin-bottom:10px;">Informe o total que já chegou de cada item (somando entregas anteriores). Se tudo chegar, a requisição vai sozinha para Recebido.</p>
+        <table class="recebimento-tabela">
+          <thead><tr><th>Item</th><th>Pedido</th><th>Recebido</th></tr></thead>
+          <tbody id="recebimentoItens"></tbody>
+        </table>
+      </div>
+      <div class="form-field full" style="margin-top:12px;">
+        <label for="recebimentoObs" id="recebimentoObsLabel">Observação</label>
+        <textarea id="recebimentoObs" placeholder="Ex.: o fornecedor entrega o restante na próxima semana"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="req-btn" id="recebimentoVoltar">Voltar</button>
+      <button type="button" class="btn-primary" id="recebimentoConfirmar">Registrar recebimento</button>
+    </div>
+  </div>
+</div>
+
+<div class="aviso-toast" id="avisoToast" role="status" aria-live="polite"></div>
 
 <div class="modal-backdrop" id="perfilBackdrop">
   <div class="modal" style="max-width:420px;">
@@ -1030,14 +1073,31 @@ const PROJETO_POR_NUMERO = {};
 PROJETOS_SEED.forEach(p=>{ PROJETO_POR_NUMERO[p.numero] = p; });
 
 const SOLICITANTES_SEED = ["Marcos Aurélio","Fernanda Lima","Ricardo Nunes","Juliana Prado","Bruno Castilho","Patrícia Gomes","André Salles","Camila Duarte","Eduardo Vasconcelos","Larissa Monteiro"];
+// Comprador fictício dos dados de exemplo — o repositório é público, então nenhum nome real entra aqui.
+const COMPRADOR_SEED = "Rafael Tavares";
 // Pessoas cadastradas na plataforma que podem ser marcadas com @ nos comentários (solicitantes + comprador).
-const PESSOAS_PLATAFORMA = [...SOLICITANTES_SEED, "Erick Rodrigues"];
+const PESSOAS_PLATAFORMA = [...SOLICITANTES_SEED, COMPRADOR_SEED];
 
-const STATUS_LABEL = {pendente:"Pendente", elaboracao:"Elaboração de pedido", enviado:"Enviado", recebido:"Recebido", nao_recebido:"Não recebido", cancelado:"Cancelado"};
-const STATUS_ORDEM = ["pendente","elaboracao","enviado","recebido","nao_recebido","cancelado"];
-// Só quem solicitou a requisição ou o gestor admin geral pode mover manualmente para estes dois status —
+const STATUS_LABEL = {pendente:"Pendente", elaboracao:"Elaboração de pedido", enviado:"Enviado", recebido_parcial:"Recebido parcial", recebido:"Recebido", nao_recebido:"Não recebido", cancelado:"Cancelado"};
+const STATUS_ORDEM = ["pendente","elaboracao","enviado","recebido_parcial","recebido","nao_recebido","cancelado"];
+// Só quem solicitou a requisição ou o gestor admin geral pode mover manualmente para estes status —
 // quem "recebeu" (ou não) a mercadoria é quem pediu, então só essa pessoa (ou um gestor) sabe confirmar.
-const STATUS_RESTRITOS = ["recebido","nao_recebido"];
+const STATUS_RESTRITOS = ["recebido_parcial","recebido","nao_recebido"];
+// Para onde cada status pode ir. Evita saltos sem sentido (ex.: Pendente direto para Recebido) e deixa
+// Recebido como etapa final. Cancelado só volta para Pendente, e sempre com motivo (reabertura).
+// "Recebido parcial" → "Recebido parcial" é permitido: é registrar mais uma entrega do que faltava.
+const TRANSICOES = {
+  pendente:         ["elaboracao","enviado","cancelado"],
+  elaboracao:       ["enviado","cancelado"],
+  enviado:          ["recebido_parcial","recebido","nao_recebido","cancelado"],
+  recebido_parcial: ["recebido_parcial","recebido","cancelado"],
+  nao_recebido:     ["recebido_parcial","recebido","cancelado"],
+  recebido:         [],
+  cancelado:        ["pendente"],
+};
+function transicaoPermitida(de, para){
+  return (TRANSICOES[de] || []).includes(para);
+}
 const PRIORIDADE_LABEL = {baixa:"Baixa", normal:"Normal", alta:"Alta", urgente:"Urgente"};
 const PRIORIDADE_RANK = {baixa:0, normal:1, alta:2, urgente:3};
 
@@ -1054,6 +1114,8 @@ function criarNotificacao(paraNome, texto, requisicaoId){
 }
 
 function isFinalizada(status){ return status === "recebido" || status === "cancelado"; }
+// Compra em curso: já tem comprador e ainda falta material chegar (inclui o que chegou só em parte).
+const STATUS_ANDAMENTO = ["elaboracao","enviado","recebido_parcial"];
 // A urgência é dada só pela Prioridade (não há campo de prazo no pedido), então "atrasada" significa
 // exatamente "caiu em Não recebido" — ou seja, passou do prazo de
 // entrega combinado com o fornecedor e ninguém confirmou o recebimento ainda.
@@ -1127,14 +1189,14 @@ const DEFINICOES_SEED = [
   ]},
   {status:"elaboracao", origem:"Obras",         projetoIdx:2, solicitanteIdx:2, diasCriacao:6,  diasNecessario:10,  prioridade:"alta",    anexosIdx:[2],   faturamentoDireto:false, obsIdx:2},
   {status:"elaboracao", origem:"Administração", projetoIdx:0, solicitanteIdx:3, diasCriacao:4,  diasNecessario:-1,  prioridade:"normal",  anexosIdx:[3,4], faturamentoDireto:true,  obsIdx:3, comentariosSeed:[
-    {autor:"Erick Rodrigues", texto:"@Juliana Prado essa é faturamento direto — já alinhou com o cliente sobre o processo separado?", diasAtras:2},
+    {autor:COMPRADOR_SEED, texto:"@Juliana Prado essa é faturamento direto — já alinhou com o cliente sobre o processo separado?", diasAtras:2},
   ]},
   {status:"elaboracao", origem:"Manutenção",    projetoIdx:2, solicitanteIdx:4, diasCriacao:9,  diasNecessario:14,  prioridade:"normal",  anexosIdx:[0],   faturamentoDireto:false, obsIdx:4},
   {status:"elaboracao", origem:"Obras",         projetoIdx:4, solicitanteIdx:5, diasCriacao:11, diasNecessario:18,  prioridade:"baixa",   anexosIdx:[1],   faturamentoDireto:false, obsIdx:5},
   {status:"enviado",    origem:"Manutenção",    projetoIdx:3, solicitanteIdx:6, diasCriacao:14, diasNecessario:-3,  prioridade:"alta",    anexosIdx:[2],   faturamentoDireto:false, obsIdx:0, diasPrevistaEntrega:5},
   {status:"enviado",    origem:"Obras",         projetoIdx:5, solicitanteIdx:7, diasCriacao:20, diasNecessario:-14, prioridade:"normal",  anexosIdx:[3],   faturamentoDireto:false, obsIdx:1, diasPrevistaEntrega:-4},
   {status:"nao_recebido", origem:"Obras",       projetoIdx:6, solicitanteIdx:8, diasCriacao:22, diasNecessario:-12, prioridade:"urgente", anexosIdx:[4],   faturamentoDireto:false, obsIdx:2, diasPrevistaEntrega:-6, comentariosSeed:[
-    {autor:"Erick Rodrigues", texto:"@André Salles o prazo de entrega já passou e o sistema marcou como não recebido — você confirma que não chegou? Se recebeu, pode mudar o status pra Recebido.", diasAtras:1},
+    {autor:COMPRADOR_SEED, texto:"@André Salles o prazo de entrega já passou e o sistema marcou como não recebido — você confirma que não chegou? Se recebeu, pode mudar o status pra Recebido.", diasAtras:1},
   ]},
   {status:"recebido",   origem:"Manutenção",    projetoIdx:4, solicitanteIdx:9, diasCriacao:25, diasNecessario:-10, prioridade:"normal",  anexosIdx:[0,1], faturamentoDireto:false, obsIdx:3, diasPrevistaEntrega:-8},
   {status:"cancelado",  origem:"Administração", projetoIdx:1, solicitanteIdx:0, diasCriacao:15, diasNecessario:-5,  prioridade:"baixa",   anexosIdx:[2],   faturamentoDireto:false, obsIdx:4, motivoCancelamento:"Necessidade cancelada pelo solicitante — projeto teve escopo reduzido."},
@@ -1145,12 +1207,25 @@ const DEFINICOES_SEED = [
   {status:"enviado",    origem:"Manutenção",    projetoIdx:6, solicitanteIdx:5, diasCriacao:24, diasNecessario:-9,  prioridade:"normal",  anexosIdx:[3],   faturamentoDireto:false, obsIdx:3, diasPrevistaEntrega:3},
   {status:"pendente",   origem:"Obras",         projetoIdx:9, solicitanteIdx:6, diasCriacao:1,  diasNecessario:-4,  prioridade:"alta",    anexosIdx:[4],   faturamentoDireto:true,  obsIdx:4},
   {status:"elaboracao", origem:"Obras",         projetoIdx:1, solicitanteIdx:7, diasCriacao:5,  diasNecessario:1,   prioridade:"normal",  anexosIdx:[0],   faturamentoDireto:false, obsIdx:5},
+  {status:"recebido_parcial", origem:"Obras",   projetoIdx:3, solicitanteIdx:2, diasCriacao:16, diasNecessario:-2,  prioridade:"alta",    anexosIdx:[1],   faturamentoDireto:false, obsIdx:0, diasPrevistaEntrega:4},
 ];
 
-const COMPRADOR_SEED = "Erick Rodrigues";
+// Itens de exemplo, distribuídos em rodízio pelas requisições acima — assim o detalhe e a planilha
+// (.xlsx) já aparecem preenchidos na demonstração.
+const ITENS_SEED = [
+  [{descricao:"Cabo flexível 2,5mm² preto", modelo:"Rolo 100m", quantidade:4}, {descricao:"Disjuntor bipolar 32A", modelo:"Curva C", quantidade:6}],
+  [{descricao:"Luva de vaqueta", modelo:"Tamanho 9", quantidade:20}, {descricao:"Óculos de proteção incolor", modelo:"", quantidade:20}],
+  [{descricao:"Eletroduto corrugado 3/4\"", modelo:"Rolo 50m", quantidade:3}, {descricao:"Caixa de passagem 4x2", modelo:"PVC", quantidade:40}, {descricao:"Abraçadeira nylon 200mm", modelo:"Pacote 100un", quantidade:5}],
+  [{descricao:"Lâmpada LED tubular 18W", modelo:"T8 6500K", quantidade:30}],
+  [{descricao:"Parafuso sextavado M10x50", modelo:"Zincado", quantidade:200}, {descricao:"Porca M10", modelo:"Zincada", quantidade:200}],
+  [{descricao:"Toner impressora", modelo:"Compatível HP 105A", quantidade:2}, {descricao:"Papel A4", modelo:"Caixa 10 resmas", quantidade:3}],
+];
+
 (function gerarSeed(){
   const hoje = new Date();
-  DEFINICOES_SEED.forEach(def=>{
+  const COM_COMPRADOR = ["elaboracao","enviado","recebido_parcial","recebido","nao_recebido"];
+  const JA_ENVIADO = ["enviado","recebido_parcial","recebido","nao_recebido"];
+  DEFINICOES_SEED.forEach((def, idxDef)=>{
     const projetos = PROJETOS_POR_ORIGEM[def.origem];
     const projeto = projetos[def.projetoIdx % projetos.length];
     const solicitante = SOLICITANTES_SEED[def.solicitanteIdx % SOLICITANTES_SEED.length];
@@ -1164,13 +1239,14 @@ const COMPRADOR_SEED = "Erick Rodrigues";
     // etapas de compra (elaboração/enviado) ficam com o comprador. Mudanças automáticas não têm usuário.
     const historico = [{status:"pendente", data, usuario: solicitante}];
     const empilhar = (status, extra)=>{
-      historico.push(Object.assign({status, data:new Date(data.getTime() + historico.length*2*86400000), usuario:"Erick Rodrigues"}, extra || {}));
+      historico.push(Object.assign({status, data:new Date(data.getTime() + historico.length*2*86400000), usuario:COMPRADOR_SEED}, extra || {}));
     };
     if(def.status === "cancelado"){
       empilhar("cancelado", {motivo:def.motivoCancelamento, usuario: solicitante});
     } else {
-      if(["elaboracao","enviado","recebido","nao_recebido"].includes(def.status)) empilhar("elaboracao", {motivo:`Comprador responsável: ${COMPRADOR_SEED}.`});
-      if(["enviado","recebido","nao_recebido"].includes(def.status)) empilhar("enviado");
+      if(COM_COMPRADOR.includes(def.status)) empilhar("elaboracao", {motivo:`Comprador responsável: ${COMPRADOR_SEED}.`});
+      if(JA_ENVIADO.includes(def.status)) empilhar("enviado");
+      if(def.status === "recebido_parcial") empilhar("recebido_parcial", {usuario: solicitante, motivo:"Chegou parte do material; o restante segue pendente com o fornecedor."});
       if(def.status === "recebido") empilhar("recebido", {usuario: solicitante});
       if(def.status === "nao_recebido"){
         historico.push({status:"nao_recebido", data:new Date(hoje.getTime() - 1*86400000), automatico:true,
@@ -1178,8 +1254,17 @@ const COMPRADOR_SEED = "Erick Rodrigues";
       }
     }
 
+    // Recebido: tudo chegou. Recebido parcial: o primeiro item chegou completo e os demais pela metade.
+    const itens = ITENS_SEED[idxDef % ITENS_SEED.length].map((i, n)=>{
+      const item = {...i};
+      if(def.status === "recebido") item.recebido = i.quantidade;
+      if(def.status === "recebido_parcial") item.recebido = n === 0 ? i.quantidade : Math.floor(i.quantidade / 2);
+      return item;
+    });
+
     REQUISICOES.push({
       id: novoId(),
+      itens,
       data, solicitante, origem: def.origem,
       projetoNumero: projeto.numero, projetoNome: projeto.nome,
       prioridade: def.prioridade,
@@ -1188,7 +1273,7 @@ const COMPRADOR_SEED = "Erick Rodrigues";
       anexos: def.anexosIdx.map(i=>criarAnexoFalso(ANEXOS_SEED[i % ANEXOS_SEED.length])),
       faturamentoDireto: def.faturamentoDireto,
       motivoCancelamento: def.motivoCancelamento || "",
-      compradorResponsavel: ["elaboracao","enviado","recebido","nao_recebido"].includes(def.status) ? COMPRADOR_SEED : "",
+      compradorResponsavel: COM_COMPRADOR.includes(def.status) ? COMPRADOR_SEED : "",
       comentarios: (def.comentariosSeed || []).map(c=>({
         autor: c.autor,
         texto: c.texto,
@@ -1208,7 +1293,7 @@ const COMPRADOR_SEED = "Erick Rodrigues";
 let filtroAtivo = {status:"todas", origem:"todas", prioridade:"todas", solicitante:"todos", busca:""};
 
 function passaFiltroReq(r){
-  if(filtroAtivo.status === "andamento" && !["elaboracao","enviado"].includes(r.status)) return false;
+  if(filtroAtivo.status === "andamento" && !STATUS_ANDAMENTO.includes(r.status)) return false;
   else if(filtroAtivo.status === "atrasadas" && !isAtrasada(r)) return false;
   else if(!["todas","andamento","atrasadas"].includes(filtroAtivo.status) && r.status !== filtroAtivo.status) return false;
   if(filtroAtivo.origem !== "todas" && r.origem !== filtroAtivo.origem) return false;
@@ -1368,13 +1453,9 @@ function renderKanban(){
       col.classList.remove("arrasto-sobre");
       const idSolto = cardArrastadoId || (e.dataTransfer && e.dataTransfer.getData("text/plain"));
       if(!idSolto) return;
-      if(STATUS_RESTRITOS.includes(status)){
-        const r = REQUISICOES.find(x=>x.id===idSolto);
-        if(r && !podeAlterarRecebimento(r)){
-          alert(`Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode mover esta requisição para "${STATUS_LABEL[status]}". Defina seu usuário no botão "👤" no topo da página.`);
-          return;
-        }
-      }
+      // Soltar na própria coluna não muda nada; as demais regras (transição e permissão) ficam em tentarMudarStatus.
+      const r = REQUISICOES.find(x=>x.id===idSolto);
+      if(r && r.status === status) return;
       tentarMudarStatus(idSolto, status, false);
     });
 
@@ -1409,7 +1490,7 @@ function renderKPIs(){
   const total = REQUISICOES.length;
   const canceladas = REQUISICOES.filter(r=>r.status==="cancelado").length;
   const pendentes = REQUISICOES.filter(r=>r.status==="pendente").length;
-  const andamento = REQUISICOES.filter(r=>["elaboracao","enviado"].includes(r.status)).length;
+  const andamento = REQUISICOES.filter(r=>STATUS_ANDAMENTO.includes(r.status)).length;
   // "Atrasada" agora é sinônimo de "Não recebido" (isAtrasada já reflete isso) — passou do prazo de
   // entrega combinado e ninguém confirmou o recebimento, por isso é um único KPI, não dois.
   const atrasadas = REQUISICOES.filter(isAtrasada).length;
@@ -1417,7 +1498,7 @@ function renderKPIs(){
   const kpis = [
     {label:"Total de requisições", value:`${total}`, delta:`${canceladas} cancelada${canceladas!==1?'s':''}`},
     {label:"Aguardando triagem", value:`${pendentes}`, delta:"clique para ver", warn:pendentes>0, filtro:"pendente"},
-    {label:"Em andamento", value:`${andamento}`, delta:"elaboração de pedido e enviado", filtro:"andamento"},
+    {label:"Em andamento", value:`${andamento}`, delta:"elaboração, enviado e recebido parcial", filtro:"andamento"},
     {label:"Atrasadas", value:`${atrasadas}`, delta:"não recebido dentro do prazo combinado", warn:atrasadas>0, filtro:"atrasadas"},
   ];
   kpiGrid.innerHTML = "";
@@ -1605,7 +1686,7 @@ function abrirDrawer(id){
 
   const entregaWrap = document.getElementById("reqInfoEntregaWrap");
   const btnEditarEntrega = document.getElementById("btnEditarEntrega");
-  const podeDefinirEntrega = ["enviado","nao_recebido"].includes(r.status);
+  const podeDefinirEntrega = ["enviado","recebido_parcial","nao_recebido"].includes(r.status);
   if(r.dataPrevistaEntrega || podeDefinirEntrega){
     entregaWrap.style.display = "";
     if(r.dataPrevistaEntrega){
@@ -1646,9 +1727,18 @@ function abrirDrawer(id){
   const itensWrap = document.getElementById("reqInfoItensWrap");
   if(r.itens && r.itens.length){
     itensWrap.style.display = "";
-    document.getElementById("reqInfoItens").innerHTML = r.itens.map(i=>
-      `<tr><td>${escapeHtml(i.descricao)}</td><td>${escapeHtml(i.modelo || "—")}</td><td>${escapeHtml(i.quantidade)}</td></tr>`
-    ).join("");
+    // A coluna "Recebido" só aparece quando já houve algum registro de recebimento.
+    const mostraRecebido = r.itens.some(i=> i.recebido != null);
+    document.getElementById("reqInfoItensColRecebido").style.display = mostraRecebido ? "" : "none";
+    document.getElementById("reqInfoItens").innerHTML = r.itens.map(i=>{
+      let colRecebido = "";
+      if(mostraRecebido){
+        const rec = Number(i.recebido) || 0;
+        const ok = rec >= Number(i.quantidade);
+        colRecebido = `<td class="${ok ? "recebido-ok" : "recebido-falta"}">${escapeHtml(rec)}${ok ? " ✔" : ` (faltam ${escapeHtml(Number(i.quantidade) - rec)})`}</td>`;
+      }
+      return `<tr><td>${escapeHtml(i.descricao)}</td><td>${escapeHtml(i.modelo || "—")}</td><td>${escapeHtml(i.quantidade)}</td>${colRecebido}</tr>`;
+    }).join("");
   } else {
     itensWrap.style.display = "none";
   }
@@ -1663,12 +1753,26 @@ function abrirDrawer(id){
 
   const podeReceb = podeAlterarRecebimento(r);
   const statusSelect = document.getElementById("reqStatusSelect");
+  // Só aparecem habilitados o status atual e os destinos permitidos a partir dele (TRANSICOES).
   statusSelect.innerHTML = STATUS_ORDEM.map(s=>{
-    const bloqueado = STATUS_RESTRITOS.includes(s) && !podeReceb;
-    return `<option value="${s}" ${s===r.status?'selected':''} ${bloqueado?'disabled':''}>${STATUS_LABEL[s]}${bloqueado ? ' 🔒' : ''}</option>`;
+    const atual = s === r.status;
+    const foraDoFluxo = !atual && !transicaoPermitida(r.status, s);
+    const semPermissao = !atual && STATUS_RESTRITOS.includes(s) && !podeReceb;
+    const bloqueado = foraDoFluxo || semPermissao;
+    return `<option value="${s}" ${atual?'selected':''} ${bloqueado?'disabled':''}>${STATUS_LABEL[s]}${(semPermissao && !foraDoFluxo) ? ' 🔒' : ''}</option>`;
   }).join("");
+  statusSelect.disabled = !(TRANSICOES[r.status] || []).length;
+  document.getElementById("reqStatusSalvar").disabled = statusSelect.disabled;
+  // Cancelada: o mesmo botão vira "Reabrir". Recebido: etapa final, sem botão.
+  const btnCancelarReq = document.getElementById("reqStatusCancelar");
+  btnCancelarReq.style.display = r.status === "recebido" ? "none" : "";
+  btnCancelarReq.textContent = r.status === "cancelado" ? "↺ Reabrir requisição" : "Cancelar requisição";
+  btnCancelarReq.classList.toggle("cancelar", r.status !== "cancelado");
   const avisoPermissaoEl = document.getElementById("reqStatusPermissaoAviso");
-  if(!podeReceb){
+  if(r.status === "recebido"){
+    avisoPermissaoEl.textContent = "✔ Requisição concluída: Recebido é a etapa final.";
+    avisoPermissaoEl.style.display = "";
+  } else if(!podeReceb && !isFinalizada(r.status)){
     avisoPermissaoEl.textContent = `🔒 Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como Recebido/Não recebido.`;
     avisoPermissaoEl.style.display = "";
   } else {
@@ -1685,15 +1789,23 @@ function abrirDrawer(id){
   renderComentarioAnexoLista();
   document.getElementById("comentarioErro").classList.remove("show");
   fecharMencaoDropdown();
-  try{ document.getElementById("comentarioAutor").value = localStorage.getItem(COMENTARIO_AUTOR_KEY) || ""; }
-  catch(e){ document.getElementById("comentarioAutor").value = ""; }
+  atualizarIdentidadeComentario();
 
   reqBackdrop.classList.add("open");
   reqDrawer.classList.add("open");
 }
 
 // ---------- COMENTÁRIOS ----------
-const COMENTARIO_AUTOR_KEY = "suprimentos-demo-requisicoes-autor-comentario";
+// O autor do comentário é sempre o usuário do "👤" (o mesmo usado nas permissões e no histórico),
+// para ninguém comentar com um nome e mudar status com outro.
+function atualizarIdentidadeComentario(){
+  const el = document.getElementById("comentarioIdentidade");
+  const nome = usuarioAtualNome();
+  el.innerHTML = nome
+    ? `Comentando como <b>${escapeHtml(nome)}</b> · <button type="button" class="link-editar" id="btnTrocarUsuarioComentario">trocar</button>`
+    : `<button type="button" class="link-editar" id="btnTrocarUsuarioComentario">👤 Defina seu usuário</button> para comentar.`;
+  document.getElementById("btnTrocarUsuarioComentario").addEventListener("click", abrirPerfil);
+}
 const comentarioTexto = document.getElementById("comentarioTexto");
 const comentarioAnexoLista = document.getElementById("comentarioAnexoLista");
 const mencaoDropdown = document.getElementById("mencaoDropdown");
@@ -1797,10 +1909,10 @@ document.getElementById("btnEnviarComentario").addEventListener("click", ()=>{
   const r = REQUISICOES.find(x=>x.id===requisicaoAtualId);
   if(!r) return;
   const erroEl = document.getElementById("comentarioErro");
-  const autor = document.getElementById("comentarioAutor").value.trim();
+  const autor = usuarioAtualNome().trim();
   const texto = comentarioTexto.value.trim();
 
-  if(!autor){ erroEl.textContent = "Informe seu nome para comentar."; erroEl.classList.add("show"); return; }
+  if(!autor){ erroEl.textContent = "Defina seu usuário no botão 👤 (no topo) para comentar."; erroEl.classList.add("show"); return; }
   if(!texto && !comentarioAnexos.length){ erroEl.textContent = "Escreva algo ou anexe um arquivo/foto."; erroEl.classList.add("show"); return; }
   const arquivoGrande = comentarioAnexos.find(f=> f.size > MAX_ANEXO_BYTES);
   if(arquivoGrande){
@@ -1817,7 +1929,6 @@ document.getElementById("btnEnviarComentario").addEventListener("click", ()=>{
     anexos: comentarioAnexos.map(f=>({name:f.name, url:criarUrlAnexo(f), type:f.type||""})),
     mencionados,
   });
-  try{ localStorage.setItem(COMENTARIO_AUTOR_KEY, autor); }catch(e){}
 
   // Cada pessoa @mencionada (menos quem escreveu) ganha uma notificação no sino — é o caso de uso
   // que motivou o sino existir: hoje a @menção só destacava visualmente, sem avisar ninguém de fato.
@@ -1838,9 +1949,32 @@ document.getElementById("btnEnviarComentario").addEventListener("click", ()=>{
 // data de entrega obrigatória ao enviar, permissão para Recebido/Não recebido) valem nos dois casos.
 function tentarMudarStatus(id, novoStatus, reabrirDrawerDepois){
   const r = REQUISICOES.find(x=>x.id===id);
-  if(!r || novoStatus === r.status) return;
+  if(!r) return;
+  // Repetir "Recebido parcial" é registrar mais uma entrega; qualquer outro status igual não faz nada.
+  if(novoStatus === r.status && novoStatus !== "recebido_parcial") return;
+  if(!transicaoPermitida(r.status, novoStatus)){
+    const destinos = (TRANSICOES[r.status] || []).filter(s=> s !== r.status).map(s=> STATUS_LABEL[s]);
+    mostrarAviso(`Não é possível passar de "${STATUS_LABEL[r.status]}" para "${STATUS_LABEL[novoStatus]}". `
+      + (destinos.length ? `Daqui ela pode ir para: ${destinos.join(", ")}.` : `"${STATUS_LABEL[r.status]}" é a etapa final.`), "erro");
+    if(reabrirDrawerDepois) abrirDrawer(r.id);
+    return;
+  }
+  if(STATUS_RESTRITOS.includes(novoStatus) && !podeAlterarRecebimento(r)){
+    mostrarAviso(`Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como "${STATUS_LABEL[novoStatus]}". Defina seu usuário no botão "👤" no topo da página.`, "erro");
+    if(reabrirDrawerDepois) abrirDrawer(r.id);
+    return;
+  }
   if(novoStatus === "cancelado"){
-    abrirMotivoCancelamento(id, reabrirDrawerDepois);
+    abrirMotivoCancelamento(id, reabrirDrawerDepois, "cancelar");
+    return;
+  }
+  if(novoStatus === "pendente"){
+    // Única volta permitida: reabrir uma requisição cancelada, sempre com motivo.
+    abrirMotivoCancelamento(id, reabrirDrawerDepois, "reabrir");
+    return;
+  }
+  if(novoStatus === "recebido_parcial"){
+    abrirRecebimento(id, reabrirDrawerDepois);
     return;
   }
   if(novoStatus === "elaboracao"){
@@ -1851,11 +1985,8 @@ function tentarMudarStatus(id, novoStatus, reabrirDrawerDepois){
     abrirDataEntrega(id, reabrirDrawerDepois);
     return;
   }
-  if(STATUS_RESTRITOS.includes(novoStatus) && !podeAlterarRecebimento(r)){
-    alert(`Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como "${STATUS_LABEL[novoStatus]}". Defina seu usuário no botão "👤" no topo da página.`);
-    if(reabrirDrawerDepois) abrirDrawer(r.id);
-    return;
-  }
+  // Recebido de uma vez: tudo o que foi pedido chegou.
+  if(novoStatus === "recebido") (r.itens || []).forEach(i=>{ i.recebido = i.quantidade; });
   r.status = novoStatus;
   r.historico.push({status:novoStatus, data:new Date(), usuario: usuarioAtualNome() || "Não identificado"});
   renderTabela();
@@ -1863,6 +1994,103 @@ function tentarMudarStatus(id, novoStatus, reabrirDrawerDepois){
   renderKPIs();
   if(reabrirDrawerDepois) abrirDrawer(r.id);
 }
+
+// ---------- AVISO NA TELA (substitui o alert() do navegador) ----------
+// Mensagem curta no rodapé, no mesmo visual do app; some sozinha ou ao clicar.
+const avisoToast = document.getElementById("avisoToast");
+let avisoTimer = null;
+function mostrarAviso(texto, tipo){
+  avisoToast.textContent = texto;
+  avisoToast.classList.toggle("erro", tipo === "erro");
+  avisoToast.classList.add("open");
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(()=> avisoToast.classList.remove("open"), 6000);
+}
+avisoToast.addEventListener("click", ()=> avisoToast.classList.remove("open"));
+
+// ---------- RECEBIMENTO PARCIAL ----------
+// Quem pediu informa quanto já chegou de cada item (total acumulado). Se tudo chegou, a requisição vai
+// direto para Recebido; senão fica em "Recebido parcial", e pode receber novos registros até completar.
+// Requisição sem itens cadastrados: a observação passa a ser obrigatória (é o único registro do que chegou).
+const recebimentoBackdrop = document.getElementById("recebimentoBackdrop");
+const recebimentoErro = document.getElementById("recebimentoErro");
+const recebimentoObs = document.getElementById("recebimentoObs");
+let idPendenteRecebimento = null;
+let reabrirDrawerAposRecebimento = false;
+
+function abrirRecebimento(id, reabrirDrawerDepois){
+  const r = REQUISICOES.find(x=>x.id===id);
+  if(!r) return;
+  idPendenteRecebimento = id;
+  reabrirDrawerAposRecebimento = !!reabrirDrawerDepois;
+  const temItens = !!(r.itens && r.itens.length);
+  document.getElementById("recebimentoTitulo").textContent = `Registrar recebimento parcial — ${r.id}`;
+  document.getElementById("recebimentoItensWrap").style.display = temItens ? "" : "none";
+  document.getElementById("recebimentoObsLabel").textContent = temItens ? "Observação" : "O que chegou? *";
+  document.getElementById("recebimentoItens").innerHTML = temItens ? r.itens.map((i, idx)=>`
+    <tr>
+      <td>${escapeHtml(i.descricao)}${i.modelo ? `<div class="table-subtext">${escapeHtml(i.modelo)}</div>` : ""}</td>
+      <td>${escapeHtml(i.quantidade)}</td>
+      <td><input type="number" min="0" max="${Number(i.quantidade) || 0}" step="any" data-idx="${idx}" value="${Number(i.recebido) || 0}"></td>
+    </tr>`).join("") : "";
+  recebimentoObs.value = "";
+  recebimentoErro.classList.remove("show");
+  recebimentoBackdrop.classList.add("open");
+}
+function fecharRecebimento(){
+  recebimentoBackdrop.classList.remove("open");
+  const idAbandonado = idPendenteRecebimento;
+  const reabrir = reabrirDrawerAposRecebimento;
+  idPendenteRecebimento = null;
+  if(idAbandonado && reabrir) abrirDrawer(idAbandonado);
+  else { renderTabela(); renderKanban(); }
+}
+document.getElementById("recebimentoClose").addEventListener("click", fecharRecebimento);
+document.getElementById("recebimentoVoltar").addEventListener("click", fecharRecebimento);
+recebimentoBackdrop.addEventListener("click", (e)=>{ if(e.target === recebimentoBackdrop) fecharRecebimento(); });
+
+document.getElementById("recebimentoConfirmar").addEventListener("click", ()=>{
+  const r = REQUISICOES.find(x=>x.id===idPendenteRecebimento);
+  if(!r) return;
+  const obs = recebimentoObs.value.trim();
+  const erro = (msg)=>{ recebimentoErro.textContent = msg; recebimentoErro.classList.add("show"); };
+  const itens = r.itens || [];
+  let completo = false;
+  let resumo = "";
+
+  if(itens.length){
+    const novos = [];
+    for(const inp of document.querySelectorAll("#recebimentoItens input")){
+      const item = itens[Number(inp.dataset.idx)];
+      const v = inp.value === "" ? 0 : Number(inp.value);
+      if(!isFinite(v) || v < 0) return erro(`Quantidade inválida em "${item.descricao}".`);
+      if(v > Number(item.quantidade)) return erro(`"${item.descricao}": recebido (${v}) maior que o pedido (${item.quantidade}).`);
+      novos.push(v);
+    }
+    if(novos.every(v=> v === 0)) return erro("Informe a quantidade recebida de pelo menos um item.");
+    if(novos.every((v, n)=> v === (Number(itens[n].recebido) || 0))) return erro("Nenhuma quantidade mudou desde o último registro.");
+    novos.forEach((v, n)=>{ itens[n].recebido = v; });
+    completo = itens.every(i=> Number(i.recebido) >= Number(i.quantidade));
+    resumo = itens.map(i=> `${i.descricao}: ${i.recebido} de ${i.quantidade}`).join("; ") + ".";
+  } else if(!obs){
+    return erro("Descreva o que chegou para registrar o recebimento parcial.");
+  }
+
+  const novoStatus = completo ? "recebido" : "recebido_parcial";
+  r.status = novoStatus;
+  r.historico.push({
+    status: novoStatus, data: new Date(), usuario: usuarioAtualNome() || "Não identificado",
+    motivo: [completo ? "Todos os itens recebidos." : resumo, obs].filter(Boolean).join(" "),
+  });
+  const reabrir = reabrirDrawerAposRecebimento;
+  recebimentoBackdrop.classList.remove("open");
+  idPendenteRecebimento = null;
+  renderTabela();
+  renderKanban();
+  renderKPIs();
+  if(completo) mostrarAviso(`Todos os itens de ${r.id} chegaram: requisição marcada como Recebido.`);
+  if(reabrir) abrirDrawer(r.id);
+});
 
 // ---------- DATA PREVISTA DE ENTREGA ----------
 // Quem finaliza a compra (comprador ou auxiliar) preenche essa data ao mover pra "Enviado" — é
@@ -1880,7 +2108,7 @@ function abrirDataEntrega(id, reabrirDrawerDepois){
   idPendenteEntrega = id;
   reabrirDrawerAposEntrega = !!reabrirDrawerDepois;
   const r = REQUISICOES.find(x=>x.id===id);
-  const eEdicao = !!(r && ["enviado","nao_recebido","recebido"].includes(r.status));
+  const eEdicao = !!(r && ["enviado","recebido_parcial","nao_recebido","recebido"].includes(r.status));
   const precisaComprador = !eEdicao && !(r && r.compradorResponsavel);
   document.getElementById("dataEntregaCompradorWrap").style.display = precisaComprador ? "" : "none";
   document.getElementById("dataEntregaComprador").value = "";
@@ -1962,7 +2190,9 @@ document.getElementById("reqStatusSalvar").addEventListener("click", ()=>{
 });
 document.getElementById("reqStatusCancelar").addEventListener("click", ()=>{
   if(!requisicaoAtualId) return;
-  abrirMotivoCancelamento(requisicaoAtualId, true);
+  const r = REQUISICOES.find(x=>x.id===requisicaoAtualId);
+  if(!r) return;
+  tentarMudarStatus(r.id, r.status === "cancelado" ? "pendente" : "cancelado", true);
 });
 
 // ---------- HISTÓRICO DE ALTERAÇÕES (modal à parte) ----------
@@ -2004,10 +2234,20 @@ const motivoCancelTexto = document.getElementById("motivoCancelTexto");
 const motivoCancelErro = document.getElementById("motivoCancelErro");
 let idPendenteCancelamento = null;
 let reabrirDrawerAposCancelamento = false;
+// O mesmo modal de motivo serve para cancelar e para reabrir uma cancelada ("cancelar" | "reabrir").
+let modoMotivo = "cancelar";
 
-function abrirMotivoCancelamento(id, reabrirDrawerDepois){
+function abrirMotivoCancelamento(id, reabrirDrawerDepois, modo){
   idPendenteCancelamento = id;
   reabrirDrawerAposCancelamento = !!reabrirDrawerDepois;
+  modoMotivo = modo === "reabrir" ? "reabrir" : "cancelar";
+  const reabrindo = modoMotivo === "reabrir";
+  document.getElementById("motivoCancelTitulo").textContent = reabrindo ? "Reabrir requisição" : "Motivo do cancelamento";
+  document.getElementById("motivoCancelDica").style.display = reabrindo ? "" : "none";
+  motivoCancelTexto.placeholder = reabrindo ? "Explique por que esta requisição volta a valer..." : "Explique por que esta requisição está sendo cancelada...";
+  const btnConfirmar = document.getElementById("motivoCancelConfirmar");
+  btnConfirmar.textContent = reabrindo ? "Reabrir requisição" : "Confirmar cancelamento";
+  btnConfirmar.classList.toggle("btn-perigo", !reabrindo);
   motivoCancelTexto.value = "";
   motivoCancelErro.classList.remove("show");
   motivoCancelBackdrop.classList.add("open");
@@ -2029,13 +2269,20 @@ motivoCancelBackdrop.addEventListener("click", (e)=>{ if(e.target === motivoCanc
 document.getElementById("motivoCancelConfirmar").addEventListener("click", ()=>{
   const motivo = motivoCancelTexto.value.trim();
   if(!motivo){
-    motivoCancelErro.textContent = "Descreva o motivo do cancelamento para continuar.";
+    motivoCancelErro.textContent = modoMotivo === "reabrir" ? "Descreva o motivo da reabertura para continuar." : "Descreva o motivo do cancelamento para continuar.";
     motivoCancelErro.classList.add("show");
     return;
   }
   const r = REQUISICOES.find(x=>x.id===idPendenteCancelamento);
   const reabrir = reabrirDrawerAposCancelamento;
-  if(r){
+  if(r && modoMotivo === "reabrir"){
+    // Reabrir começa um ciclo de compra novo: o que foi recebido e a data combinada antes não valem mais.
+    r.status = "pendente";
+    r.motivoCancelamento = "";
+    r.dataPrevistaEntrega = null;
+    (r.itens || []).forEach(i=>{ delete i.recebido; });
+    r.historico.push({status:"pendente", data:new Date(), motivo:`Reaberta: ${motivo}`, usuario: usuarioAtualNome() || "Não identificado"});
+  } else if(r){
     r.status = "cancelado";
     r.motivoCancelamento = motivo;
     r.historico.push({status:"cancelado", data:new Date(), motivo, usuario: usuarioAtualNome() || "Não identificado"});
@@ -2072,7 +2319,8 @@ function abrirComprador(id, reabrirDrawerDepois, edicao){
   popularListaCompradores();
   document.getElementById("compradorTitulo").textContent = edicao ? "Alterar comprador responsável" : "Comprador responsável";
   document.getElementById("compradorConfirmar").textContent = edicao ? "Salvar" : "Confirmar";
-  compradorInput.value = (r && r.compradorResponsavel) ? r.compradorResponsavel : "";
+  // Sem comprador ainda: sugere o usuário do "👤", que é quem está assumindo a compra.
+  compradorInput.value = (r && r.compradorResponsavel) ? r.compradorResponsavel : usuarioAtualNome();
   compradorErro.classList.remove("show");
   compradorBackdrop.classList.add("open");
   setTimeout(()=> compradorInput.focus(), 50);
@@ -2242,7 +2490,7 @@ document.getElementById("btnBaixarItens").addEventListener("click", ()=>{
 // ---------- LIMITES DE TAMANHO DOS CAMPOS ----------
 // Evita textos gigantes (que travam a tela ou enchem o banco quando houver backend).
 (function(){
-  const limites = {fSolicitante:80, fProjeto:40, fObs:1000, comentarioTexto:1000, comentarioAutor:80,
+  const limites = {fSolicitante:80, fProjeto:40, fObs:1000, comentarioTexto:1000,
                    compradorInput:80, dataEntregaComprador:80, perfilNomeInput:80, motivoCancelTexto:500};
   Object.keys(limites).forEach(id=>{ const el = document.getElementById(id); if(el) el.maxLength = limites[id]; });
 })();
@@ -2399,7 +2647,7 @@ function mesclarArquivosSelecionados(inputEl, arrayDestino){
     const jaExiste = arrayDestino.some(a=> a.name === f.name && a.size === f.size);
     if(!jaExiste) arrayDestino.push(f);
   });
-  if(recusados.length) alert("Tipo de arquivo não permitido: " + recusados.join(", ") + ". Use PDF, Excel, Word ou imagem (PNG/JPG).");
+  if(recusados.length) mostrarAviso("Tipo de arquivo não permitido: " + recusados.join(", ") + ". Use PDF, Excel, Word ou imagem (PNG/JPG).", "erro");
   inputEl.value = "";
 }
 
@@ -2572,7 +2820,8 @@ function abrirModalNovaRequisicao(){
   modoEdicaoId = null;
   modalTituloEl.textContent = "Nova Requisição de Compra";
   modalCriarBtn.textContent = "Criar requisição";
-  document.getElementById("fSolicitante").value = "";
+  // Quem abre a requisição normalmente é quem pede: já vem preenchido com o usuário do "👤" (pode trocar).
+  document.getElementById("fSolicitante").value = usuarioAtualNome();
   fOrigem.value = "";
   fProjeto.value = "";
   document.getElementById("fPrioridade").value = "normal";
