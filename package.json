@@ -1,0 +1,17 @@
+{
+  "name": "requisicao-de-compras",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Protótipo navegável de um fluxo de requisição de compras.",
+  "scripts": {
+    "test": "playwright test",
+    "test:relatorio": "playwright show-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erickea888/requisicao-de-compras.git"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

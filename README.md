@@ -59,6 +59,18 @@ Os testes estão em [`testes/concorrencia.html`](testes/concorrencia.html): cada
 
 O que muda quando entrar o Firebase está em [FIREBASE-AJUSTES.md](FIREBASE-AJUSTES.md).
 
+## Testes
+
+Testes de integração (Playwright): cada teste abre a página de verdade num navegador real, com os dados de exemplo recém-carregados, e passa pelas mesmas funções e botões que o usuário usa.
+
+```bash
+npm install
+npx playwright install chromium
+npm test
+```
+
+Os dois primeiros comandos só são necessários na primeira vez. Depois de qualquer alteração, rode `npm test`. Os testes que falham por bug conhecido estão em [testes/LISTA-DE-BUGS.md](testes/LISTA-DE-BUGS.md).
+
 ## Como rodar
 
 Baixe o `index.html` e abra no navegador. Não há instalação.
