@@ -51,11 +51,21 @@ A lógica de permissão já está isolada em funções (como `podeAlterarRecebim
 
 O protótipo passou por uma revisão de segurança (XSS, anexos, política de conteúdo). Os achados, o que foi corrigido e o checklist para a implantação real estão em [SEGURANCA.md](SEGURANCA.md).
 
+### Gravações simultâneas
+
+Toda alteração passa por uma função que lê de novo, confere a versão que a pessoa tinha na tela e as regras de status antes de gravar. Se outra ação gravou no meio, nada é gravado e a tela avisa. Criar, duplicar e comentar usam uma chave de envio, então clique duplo não duplica. O prazo vencido só é registrado uma vez.
+
+Os testes estão em [`testes/concorrencia.html`](testes/concorrencia.html): cada um simula duas pessoas confirmando a mesma ação ao mesmo tempo e confere que só uma teve efeito. A página precisa ser aberta por um endereço web (por exemplo, no GitHub Pages), não direto do disco.
+
+O que muda quando entrar o Firebase está em [FIREBASE-AJUSTES.md](FIREBASE-AJUSTES.md).
+
 ## Como rodar
 
 Baixe o `index.html` e abra no navegador. Não há instalação.
 
 ## Próximos passos
+
+- **Migração para o Firebase:** seguir a lista de [FIREBASE-AJUSTES.md](FIREBASE-AJUSTES.md).
 
 - Login e banco de dados reais (Firebase).
 - Perfis e permissões por setor.

@@ -90,6 +90,7 @@
   .page-header-row{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;}
   .page-content h1{margin:0 0 4px; font-size:21px; font-weight:700; letter-spacing:-0.02em;}
   .page-header-row .sub{margin:0; color:var(--muted); font-size:13px;}
+  button:disabled{opacity:.6; cursor:not-allowed;}
   .btn-primary{
     display:flex; align-items:center; gap:6px; padding:10px 16px; border-radius:9px; border:none;
     background:var(--accent); color:#fff; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; flex:none;
@@ -1108,9 +1109,12 @@ const PRIORIDADE_RANK = {baixa:0, normal:1, alta:2, urgente:3};
 // definido em "👤" no topo (o mesmo "usuário provisório" usado pra permissão de Recebido/Não recebido).
 const NOTIFICACOES = [];
 let PROX_NOTIF_ID = 1;
-function criarNotificacao(paraNome, texto, requisicaoId){
+// chave: identifica o fato que gerou o aviso (ex.: um vencimento de prazo, uma menção). O mesmo fato
+// nunca gera duas notificações. FIREBASE: a chave vira o ID do documento em notificacoes/{chave}.
+function criarNotificacao(paraNome, texto, requisicaoId, chave){
   if(!paraNome) return;
-  NOTIFICACOES.unshift({id: PROX_NOTIF_ID++, para: paraNome, texto, requisicaoId, data: new Date(), lida:false});
+  if(chave && NOTIFICACOES.some(n=> n.chave === chave)) return;
+  NOTIFICACOES.unshift({id: PROX_NOTIF_ID++, chave: chave || null, para: paraNome, texto, requisicaoId, data: new Date(), lida:false});
 }
 
 function isFinalizada(status){ return status === "recebido" || status === "cancelado"; }
@@ -1123,22 +1127,32 @@ function isAtrasada(r){
   return r.status === "nao_recebido";
 }
 
-// Simula o "cron" que, na vida real, rodaria no servidor: qualquer requisição "Enviada" cujo prazo
-// combinado de entrega já passou (e ninguém confirmou o recebimento) vira "Não recebido" sozinha.
-// Chamada ao carregar a página e sempre que os KPIs são recalculados, então cobre qualquer mudança de estado.
+// Qualquer requisição "Enviada" cujo prazo combinado de entrega já passou (e ninguém confirmou o
+// recebimento) vira "Não recebido" sozinha. Chamada ao carregar a página e sempre que os KPIs são
+// recalculados. Com várias pessoas com a página aberta, todas rodam isso ao mesmo tempo — por isso
+// cada vencimento só vale uma vez: a gravação confere a versão vista e a condição de novo, e a chave
+// do evento impede histórico e notificação repetidos.
+// FIREBASE: mesma lógica dentro de um runTransaction; a chave vira o ID do evento (FIREBASE-AJUSTES.md).
+function prazoVencido(r){
+  return r.status === "enviado" && r.dataPrevistaEntrega && inicioDoDia(r.dataPrevistaEntrega) < inicioDoDia(new Date());
+}
+function aplicarPrazoVencido(id, versaoVista){
+  const chave = `prazo:${id}:v${versaoVista}`;
+  return gravarRequisicao(id, versaoVista, r=>{
+    if(!prazoVencido(r)) return "O prazo desta requisição não está vencido (ou ela já saiu de Enviado).";
+    if(r.historico.some(h=> h.chaveEvento === chave)) return "Este vencimento já foi registrado.";
+    r.status = "nao_recebido";
+    r.historico.push({
+      status:"nao_recebido", data:new Date(), automatico:true, chaveEvento: chave,
+      motivo:`Prazo de entrega (${fmtData(r.dataPrevistaEntrega)}) vencido sem confirmação de recebimento — movido automaticamente. Peça ao comprador comentar perguntando ao solicitante, ou aguarde o gestor decidir.`,
+    });
+    criarNotificacao(r.solicitante, `O prazo de entrega da sua requisição ${r.id} venceu sem confirmação — ela caiu em "Não recebido". Confirme se recebeu ou não.`, r.id, chave);
+  });
+}
 function verificarPrazosEntrega(){
-  const hoje = inicioDoDia(new Date());
   let alterou = false;
-  REQUISICOES.forEach(r=>{
-    if(r.status === "enviado" && r.dataPrevistaEntrega && inicioDoDia(r.dataPrevistaEntrega) < hoje){
-      r.status = "nao_recebido";
-      r.historico.push({
-        status:"nao_recebido", data:new Date(), automatico:true,
-        motivo:`Prazo de entrega (${fmtData(r.dataPrevistaEntrega)}) vencido sem confirmação de recebimento — movido automaticamente. Peça ao comprador comentar perguntando ao solicitante, ou aguarde o gestor decidir.`,
-      });
-      criarNotificacao(r.solicitante, `O prazo de entrega da sua requisição ${r.id} venceu sem confirmação — ela caiu em "Não recebido". Confirme se recebeu ou não.`, r.id);
-      alterou = true;
-    }
+  REQUISICOES.filter(prazoVencido).forEach(r=>{
+    if(aplicarPrazoVencido(r.id, r.versao).ok) alterou = true;
   });
   return alterou;
 }
@@ -1263,7 +1277,7 @@ const ITENS_SEED = [
     });
 
     REQUISICOES.push({
-      id: novoId(),
+      id: novoId(), versao: 1,
       itens,
       data, solicitante, origem: def.origem,
       projetoNumero: projeto.numero, projetoNome: projeto.nome,
@@ -1384,6 +1398,7 @@ function renderTabela(){
 // ---------- RENDER KANBAN ----------
 const kanbanBoard = document.getElementById("kanbanBoard");
 let cardArrastadoId = null;
+let cardArrastadoVersao = null; // versão que estava no card quando o arraste começou
 
 function renderKanban(){
   const lista = REQUISICOES.filter(passaFiltroReq);
@@ -1410,6 +1425,7 @@ function renderKanban(){
         card.className = "kanban-card" + (isAtrasada(r) ? " data-atrasada" : "");
         card.draggable = true;
         card.dataset.id = r.id;
+        card.dataset.versao = r.versao;
         const projSub = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
         card.innerHTML = `
           <div class="kc-top">
@@ -1427,6 +1443,7 @@ function renderKanban(){
         card.addEventListener("click", ()=> abrirDrawer(r.id));
         card.addEventListener("dragstart", (e)=>{
           cardArrastadoId = r.id;
+          cardArrastadoVersao = r.versao;
           card.classList.add("dragging");
           if(e.dataTransfer){
             e.dataTransfer.effectAllowed = "move";
@@ -1454,9 +1471,9 @@ function renderKanban(){
       const idSolto = cardArrastadoId || (e.dataTransfer && e.dataTransfer.getData("text/plain"));
       if(!idSolto) return;
       // Soltar na própria coluna não muda nada; as demais regras (transição e permissão) ficam em tentarMudarStatus.
-      const r = REQUISICOES.find(x=>x.id===idSolto);
+      const r = obterRequisicao(idSolto);
       if(r && r.status === status) return;
-      tentarMudarStatus(idSolto, status, false);
+      tentarMudarStatus(idSolto, status, false, cardArrastadoId === idSolto ? cardArrastadoVersao : null);
     });
 
     kanbanBoard.appendChild(col);
@@ -1652,6 +1669,7 @@ atualizarBadgeNotificacoes();
 const reqBackdrop = document.getElementById("reqBackdrop");
 const reqDrawer = document.getElementById("reqDrawer");
 let requisicaoAtualId = null;
+let versaoNaTela = null; // versão da requisição aberta no drawer (conferida ao gravar)
 
 function fecharDrawer(){
   reqBackdrop.classList.remove("open");
@@ -1663,9 +1681,10 @@ reqBackdrop.addEventListener("click", fecharDrawer);
 document.addEventListener("keydown", (e)=>{ if(e.key === "Escape") fecharDrawer(); });
 
 function abrirDrawer(id){
-  const r = REQUISICOES.find(x=>x.id===id);
+  const r = obterRequisicao(id);
   if(!r) return;
   requisicaoAtualId = id;
+  versaoNaTela = r.versao;
   document.getElementById("reqDrawerTitulo").textContent = `${r.id} — ${r.solicitante}`;
   document.getElementById("reqDrawerSub").textContent = `Criada em ${fmtData(r.data)}`;
   const compWrap = document.getElementById("reqDrawerComprador");
@@ -1703,7 +1722,7 @@ function abrirDrawer(id){
   if(podeDefinirEntrega){
     btnEditarEntrega.style.display = "";
     btnEditarEntrega.textContent = r.dataPrevistaEntrega ? "✎ editar data" : "+ definir data";
-    btnEditarEntrega.onclick = ()=> abrirDataEntrega(r.id, true);
+    btnEditarEntrega.onclick = ()=> abrirDataEntrega(r.id, true, versaoNaTela);
   } else {
     btnEditarEntrega.style.display = "none";
     btnEditarEntrega.onclick = null;
@@ -1785,6 +1804,7 @@ function abrirDrawer(id){
 
   renderComentarios(r);
   comentarioTexto.value = "";
+  chaveComentario = novaChaveEnvio();
   comentarioAnexos = [];
   renderComentarioAnexoLista();
   document.getElementById("comentarioErro").classList.remove("show");
@@ -1905,8 +1925,10 @@ comentarioTexto.addEventListener("input", atualizarMencaoDropdown);
 comentarioTexto.addEventListener("keydown", (e)=>{ if(e.key === "Escape") fecharMencaoDropdown(); });
 comentarioTexto.addEventListener("blur", ()=> setTimeout(fecharMencaoDropdown, 150));
 
-document.getElementById("btnEnviarComentario").addEventListener("click", ()=>{
-  const r = REQUISICOES.find(x=>x.id===requisicaoAtualId);
+let chaveComentario = null; // nova a cada drawer aberto e a cada comentário enviado
+const btnEnviarComentario = document.getElementById("btnEnviarComentario");
+btnEnviarComentario.addEventListener("click", ()=> comBotaoTravado(btnEnviarComentario, ()=>{
+  const r = obterRequisicao(requisicaoAtualId);
   if(!r) return;
   const erroEl = document.getElementById("comentarioErro");
   const autor = usuarioAtualNome().trim();
@@ -1922,19 +1944,10 @@ document.getElementById("btnEnviarComentario").addEventListener("click", ()=>{
   }
   erroEl.classList.remove("show");
 
-  const mencionados = PESSOAS_PLATAFORMA.filter(nome=> texto.includes("@"+nome));
-  if(!r.comentarios) r.comentarios = [];
-  r.comentarios.push({
-    autor, texto, data: new Date(),
-    anexos: comentarioAnexos.map(f=>({name:f.name, url:criarUrlAnexo(f), type:f.type||""})),
-    mencionados,
-  });
-
-  // Cada pessoa @mencionada (menos quem escreveu) ganha uma notificação no sino — é o caso de uso
-  // que motivou o sino existir: hoje a @menção só destacava visualmente, sem avisar ninguém de fato.
-  mencionados.filter(nome=> normalizarNome(nome) !== normalizarNome(autor)).forEach(nome=>{
-    criarNotificacao(nome, `${autor} mencionou você num comentário da requisição ${r.id}: "${texto.slice(0,80)}${texto.length>80?'…':''}"`, r.id);
-  });
+  const anexos = comentarioAnexos.map(f=>({name:f.name, url:criarUrlAnexo(f), type:f.type||""}));
+  const resultado = opComentar(r.id, chaveComentario, autor, texto, anexos);
+  if(!resultado.ok){ mostrarAviso(resultado.erro, "erro"); return; }
+  chaveComentario = novaChaveEnvio();
   atualizarBadgeNotificacoes();
 
   comentarioTexto.value = "";
@@ -1942,57 +1955,284 @@ document.getElementById("btnEnviarComentario").addEventListener("click", ()=>{
   renderComentarioAnexoLista();
   fecharMencaoDropdown();
   renderComentarios(r);
-});
+}));
 
-// Ponto único de troca de status — usado tanto pelo drawer (Salvar status / Cancelar requisição)
-// quanto pelo arrastar-e-soltar no Kanban, então as regras abaixo (motivo obrigatório ao cancelar,
-// data de entrega obrigatória ao enviar, permissão para Recebido/Não recebido) valem nos dois casos.
-function tentarMudarStatus(id, novoStatus, reabrirDrawerDepois){
-  const r = REQUISICOES.find(x=>x.id===id);
-  if(!r) return;
+// ---------- OPERAÇÕES DE GRAVAÇÃO (ler, conferir e gravar num passo só) ----------
+// Toda alteração de requisição passa por estas funções, nunca direto pelos botões. Cada requisição
+// tem um número de "versão" que sobe a cada gravação. Quem abre uma tela guarda a versão que viu; na
+// hora de gravar, a operação lê de novo e só grava se a versão ainda for a mesma e a regra (transição,
+// permissão) ainda valer. Se outra ação gravou no meio, nada é gravado e a pessoa é avisada.
+// As operações validam tudo ANTES de mexer nos dados, para nunca deixar uma gravação pela metade.
+// FIREBASE: gravarRequisicao vira um runTransaction; as operações continuam iguais (FIREBASE-AJUSTES.md).
+function obterRequisicao(id){ return REQUISICOES.find(x=>x.id===id); }
+// Leitura do estado usada pela página de testes (testes/concorrencia.html).
+function estadoParaTestes(){ return {requisicoes: REQUISICOES, notificacoes: NOTIFICACOES}; }
+
+function gravarRequisicao(id, versaoVista, aplicar){
+  const r = obterRequisicao(id);
+  if(!r) return {ok:false, erro:"Esta requisição não existe mais (foi excluída)."};
+  if(versaoVista != null && r.versao !== versaoVista){
+    return {ok:false, erro:`A requisição ${r.id} foi alterada por outra ação enquanto você preenchia. Confira os dados e tente de novo.`};
+  }
+  const erro = aplicar(r);
+  if(erro) return {ok:false, erro};
+  r.versao++;
+  return {ok:true, r};
+}
+// FIREBASE: o histórico vira a subcoleção requisicoes/{id}/historico, gravada na mesma transação.
+function registrarHistorico(r, entrada){
+  r.historico.push(Object.assign({data:new Date(), usuario: usuarioAtualNome() || "Não identificado"}, entrada));
+}
+// Regras de troca de status, conferidas na hora de gravar (e também ao abrir a tela, só para avisar antes).
+function erroTransicao(r, novoStatus){
   // Repetir "Recebido parcial" é registrar mais uma entrega; qualquer outro status igual não faz nada.
-  if(novoStatus === r.status && novoStatus !== "recebido_parcial") return;
+  if(novoStatus === r.status && novoStatus !== "recebido_parcial") return `A requisição ${r.id} já está em "${STATUS_LABEL[novoStatus]}".`;
   if(!transicaoPermitida(r.status, novoStatus)){
     const destinos = (TRANSICOES[r.status] || []).filter(s=> s !== r.status).map(s=> STATUS_LABEL[s]);
-    mostrarAviso(`Não é possível passar de "${STATUS_LABEL[r.status]}" para "${STATUS_LABEL[novoStatus]}". `
-      + (destinos.length ? `Daqui ela pode ir para: ${destinos.join(", ")}.` : `"${STATUS_LABEL[r.status]}" é a etapa final.`), "erro");
-    if(reabrirDrawerDepois) abrirDrawer(r.id);
-    return;
+    return `Não é possível passar de "${STATUS_LABEL[r.status]}" para "${STATUS_LABEL[novoStatus]}". `
+      + (destinos.length ? `Daqui ela pode ir para: ${destinos.join(", ")}.` : `"${STATUS_LABEL[r.status]}" é a etapa final.`);
   }
   if(STATUS_RESTRITOS.includes(novoStatus) && !podeAlterarRecebimento(r)){
-    mostrarAviso(`Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como "${STATUS_LABEL[novoStatus]}". Defina seu usuário no botão "👤" no topo da página.`, "erro");
+    return `Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como "${STATUS_LABEL[novoStatus]}". Defina seu usuário no botão "👤" no topo da página.`;
+  }
+  return "";
+}
+function dataDeISO(valor){ return new Date(valor + "T00:00:00"); }
+
+// Recebido (tudo de uma vez) ou Não recebido, marcados direto.
+function opMudarStatus(id, versao, novoStatus){
+  return gravarRequisicao(id, versao, r=>{
+    if(!["recebido","nao_recebido"].includes(novoStatus)) return `"${STATUS_LABEL[novoStatus]}" precisa ser feito pela tela própria.`;
+    const e = erroTransicao(r, novoStatus); if(e) return e;
+    if(novoStatus === "recebido") (r.itens || []).forEach(i=>{ i.recebido = i.quantidade; });
+    r.status = novoStatus;
+    registrarHistorico(r, {status:novoStatus});
+  });
+}
+// Pendente → Elaboração de pedido: quem assume a compra.
+function opAssumirCompra(id, versao, nome){
+  return gravarRequisicao(id, versao, r=>{
+    if(!nome) return "Informe o comprador responsável para continuar.";
+    const e = erroTransicao(r, "elaboracao"); if(e) return e;
+    r.compradorResponsavel = nome;
+    r.status = "elaboracao";
+    registrarHistorico(r, {status:"elaboracao", motivo:`Comprador responsável: ${nome}.`});
+  });
+}
+function opAlterarComprador(id, versao, nome){
+  return gravarRequisicao(id, versao, r=>{
+    if(!nome) return "Informe o comprador responsável para continuar.";
+    if(r.status === "pendente" || isFinalizada(r.status)) return `Não dá para alterar o comprador de uma requisição em "${STATUS_LABEL[r.status]}".`;
+    const anterior = r.compradorResponsavel;
+    if(nome === anterior) return "";
+    r.compradorResponsavel = nome;
+    registrarHistorico(r, {status:r.status, motivo:`Comprador responsável alterado${anterior ? " de " + anterior : ""} para ${nome}.`});
+  });
+}
+// Pendente/Elaboração → Enviado. Se ainda não há comprador, ele vem junto (obrigatório).
+function opConfirmarEnvio(id, versao, dataISO, nomeComprador){
+  return gravarRequisicao(id, versao, r=>{
+    if(!r.compradorResponsavel && !nomeComprador) return "Informe o comprador responsável para continuar.";
+    if(!dataISO) return "Informe a data prevista de entrega para continuar.";
+    const e = erroTransicao(r, "enviado"); if(e) return e;
+    const entrada = {status:"enviado"};
+    if(!r.compradorResponsavel){
+      r.compradorResponsavel = nomeComprador;
+      entrada.motivo = `Comprador responsável: ${nomeComprador}.`;
+    }
+    r.dataPrevistaEntrega = dataDeISO(dataISO);
+    r.status = "enviado";
+    registrarHistorico(r, entrada);
+  });
+}
+// Fornecedor remarcou: muda a data. Em "Não recebido", a nova data devolve a requisição para Enviado.
+function opAlterarDataEntrega(id, versao, dataISO){
+  return gravarRequisicao(id, versao, r=>{
+    if(!dataISO) return "Informe a data prevista de entrega para continuar.";
+    if(!["enviado","recebido_parcial","nao_recebido"].includes(r.status)) return `Não dá para alterar a data de entrega de uma requisição em "${STATUS_LABEL[r.status]}".`;
+    const statusAnterior = r.status;
+    const novaData = dataDeISO(dataISO);
+    r.dataPrevistaEntrega = novaData;
+    if(statusAnterior === "nao_recebido") r.status = "enviado";
+    registrarHistorico(r, {status:r.status, motivo:`Data de entrega atualizada para ${fmtData(novaData)}${statusAnterior==="nao_recebido" ? " — voltou para Enviado" : ""}.`});
+  });
+}
+function opCancelar(id, versao, motivo){
+  return gravarRequisicao(id, versao, r=>{
+    if(!motivo) return "Descreva o motivo do cancelamento para continuar.";
+    const e = erroTransicao(r, "cancelado"); if(e) return e;
+    r.status = "cancelado";
+    r.motivoCancelamento = motivo;
+    registrarHistorico(r, {status:"cancelado", motivo});
+  });
+}
+// Reabrir começa um ciclo de compra novo: o que foi recebido e a data combinada antes não valem mais.
+function opReabrir(id, versao, motivo){
+  return gravarRequisicao(id, versao, r=>{
+    if(!motivo) return "Descreva o motivo da reabertura para continuar.";
+    const e = erroTransicao(r, "pendente"); if(e) return e;
+    r.status = "pendente";
+    r.motivoCancelamento = "";
+    r.dataPrevistaEntrega = null;
+    (r.itens || []).forEach(i=>{ delete i.recebido; });
+    registrarHistorico(r, {status:"pendente", motivo:`Reaberta: ${motivo}`});
+  });
+}
+// quantidades: total já recebido de cada item (mesma ordem de r.itens). Se tudo chegou, vai para Recebido.
+function opRegistrarRecebimento(id, versao, quantidades, obs){
+  return gravarRequisicao(id, versao, r=>{
+    const e = erroTransicao(r, "recebido_parcial"); if(e) return e;
+    const itens = r.itens || [];
+    let completo = false, resumo = "";
+    if(itens.length){
+      if(!Array.isArray(quantidades) || quantidades.length !== itens.length) return "Informe a quantidade recebida de cada item.";
+      for(let n = 0; n < itens.length; n++){
+        const v = quantidades[n];
+        if(!isFinite(v) || v < 0) return `Quantidade inválida em "${itens[n].descricao}".`;
+        if(v > Number(itens[n].quantidade)) return `"${itens[n].descricao}": recebido (${v}) maior que o pedido (${itens[n].quantidade}).`;
+      }
+      if(quantidades.every(v=> v === 0)) return "Informe a quantidade recebida de pelo menos um item.";
+      if(quantidades.every((v, n)=> v === (Number(itens[n].recebido) || 0))) return "Nenhuma quantidade mudou desde o último registro.";
+      quantidades.forEach((v, n)=>{ itens[n].recebido = v; });
+      completo = itens.every(i=> Number(i.recebido) >= Number(i.quantidade));
+      resumo = itens.map(i=> `${i.descricao}: ${i.recebido} de ${i.quantidade}`).join("; ") + ".";
+    } else if(!obs){
+      return "Descreva o que chegou para registrar o recebimento parcial.";
+    }
+    r.status = completo ? "recebido" : "recebido_parcial";
+    registrarHistorico(r, {status:r.status, motivo:[completo ? "Todos os itens recebidos." : resumo, obs].filter(Boolean).join(" ")});
+  });
+}
+// dados: {solicitante, origem, projetoNumero, projetoNome, prioridade, observacao, faturamentoDireto, anexos, itens}
+// Edição só vale enquanto a requisição estiver Pendente — conferido de novo na hora de gravar.
+function opEditarRequisicao(id, versao, dados){
+  return gravarRequisicao(id, versao, r=>{
+    if(r.status !== "pendente") return `A requisição ${r.id} já saiu de Pendente (está em "${STATUS_LABEL[r.status]}") e não pode mais ser editada.`;
+    const ROTULOS_CAMPO = {solicitante:"Solicitante", origem:"Origem", projetoNumero:"Nº do projeto", prioridade:"Prioridade", observacao:"Observação", faturamentoDireto:"Faturamento direto"};
+    const alterados = Object.keys(ROTULOS_CAMPO).filter(k=> String(r[k]) !== String(dados[k])).map(k=>ROTULOS_CAMPO[k]);
+    if(JSON.stringify((r.anexos||[]).map(a=>a.name)) !== JSON.stringify(dados.anexos.map(a=>a.name))) alterados.push("Anexo");
+    if(JSON.stringify(r.itens||[]) !== JSON.stringify(dados.itens)) alterados.push("Itens informados");
+    Object.assign(r, dados);
+    if(alterados.length) registrarHistorico(r, {status:r.status, edicao:true, motivo:`Campos alterados: ${alterados.join(", ")}.`});
+  });
+}
+
+// ---------- CHAVE DE ENVIO (evita duplicar por clique duplo ou envio repetido) ----------
+// Cada formulário ganha uma chave ao abrir. A gravação com uma chave já usada é ignorada e devolve o
+// que já foi criado. FIREBASE: a chave vira o ID do documento, gravado com create() (falha se já existe).
+function novaChaveEnvio(){
+  if(typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+}
+function novaRequisicaoBase(chave, dados){
+  return Object.assign({
+    id: novoId(), chaveCriacao: chave, versao: 1, data: new Date(),
+    motivoCancelamento:"", comentarios:[], status:"pendente",
+  }, dados, {
+    historico:[{status:"pendente", data:new Date(), usuario: usuarioAtualNome() || dados.solicitante}],
+  });
+}
+// dados: os mesmos campos de opEditarRequisicao.
+function opCriarRequisicao(chave, dados){
+  const existente = REQUISICOES.find(x=> x.chaveCriacao === chave);
+  if(existente) return {ok:true, r:existente, repetido:true};
+  // FIREBASE: o número RC-0001… sai de um contador lido e gravado na mesma transação (FIREBASE-AJUSTES.md).
+  const nova = novaRequisicaoBase(chave, dados);
+  REQUISICOES.unshift(nova);
+  return {ok:true, r:nova};
+}
+// A cópia nasce Pendente e sem anexos (cada compra leva seu próprio orçamento atualizado).
+function opDuplicarRequisicao(chave, idOriginal){
+  const existente = REQUISICOES.find(x=> x.chaveCriacao === chave);
+  if(existente) return {ok:true, r:existente, repetido:true};
+  const original = obterRequisicao(idOriginal);
+  if(!original) return {ok:false, erro:"A requisição original não existe mais (foi excluída)."};
+  const copia = novaRequisicaoBase(chave, {
+    solicitante: original.solicitante, origem: original.origem,
+    projetoNumero: original.projetoNumero, projetoNome: original.projetoNome,
+    prioridade: original.prioridade, observacao: original.observacao,
+    anexos: [], faturamentoDireto: original.faturamentoDireto,
+    itens: (original.itens || []).map(({recebido, ...i})=> ({...i})),
+  });
+  REQUISICOES.unshift(copia);
+  return {ok:true, r:copia};
+}
+// Comentário não conflita com outras alterações (não usa versão), mas a mesma chave nunca grava duas vezes.
+// FIREBASE: comentários vão para a subcoleção requisicoes/{id}/comentarios/{chave}.
+function opComentar(id, chave, autor, texto, anexos){
+  const r = obterRequisicao(id);
+  if(!r) return {ok:false, erro:"Esta requisição não existe mais (foi excluída)."};
+  if(!r.comentarios) r.comentarios = [];
+  const existente = r.comentarios.find(c=> c.chave === chave);
+  if(existente) return {ok:true, r, comentario:existente, repetido:true};
+  const mencionados = PESSOAS_PLATAFORMA.filter(nome=> texto.includes("@"+nome));
+  const comentario = {chave, autor, texto, data:new Date(), anexos, mencionados};
+  r.comentarios.push(comentario);
+  // Cada pessoa @mencionada (menos quem escreveu) ganha uma notificação no sino.
+  mencionados.filter(nome=> normalizarNome(nome) !== normalizarNome(autor)).forEach(nome=>{
+    criarNotificacao(nome, `${autor} mencionou você num comentário da requisição ${r.id}: "${texto.slice(0,80)}${texto.length>80?'…':''}"`, r.id, `mencao:${chave}:${nome}`);
+  });
+  return {ok:true, r, comentario};
+}
+
+// Ponto único de troca de status — usado tanto pelo drawer (Salvar status / Cancelar requisição)
+// quanto pelo arrastar-e-soltar no Kanban. Aqui só confere as regras para avisar cedo e abre a tela
+// certa; quem grava de verdade (conferindo de novo) são as operações acima.
+// versaoVista: a versão que estava na tela (drawer ou card do Kanban).
+function tentarMudarStatus(id, novoStatus, reabrirDrawerDepois, versaoVista){
+  const r = obterRequisicao(id);
+  if(!r) return;
+  if(novoStatus === r.status && novoStatus !== "recebido_parcial") return;
+  const versao = versaoVista != null ? versaoVista : r.versao;
+  const erro = erroTransicao(r, novoStatus);
+  if(erro){
+    mostrarAviso(erro, "erro");
     if(reabrirDrawerDepois) abrirDrawer(r.id);
     return;
   }
   if(novoStatus === "cancelado"){
-    abrirMotivoCancelamento(id, reabrirDrawerDepois, "cancelar");
+    abrirMotivoCancelamento(id, reabrirDrawerDepois, "cancelar", versao);
     return;
   }
   if(novoStatus === "pendente"){
     // Única volta permitida: reabrir uma requisição cancelada, sempre com motivo.
-    abrirMotivoCancelamento(id, reabrirDrawerDepois, "reabrir");
+    abrirMotivoCancelamento(id, reabrirDrawerDepois, "reabrir", versao);
     return;
   }
   if(novoStatus === "recebido_parcial"){
-    abrirRecebimento(id, reabrirDrawerDepois);
+    abrirRecebimento(id, reabrirDrawerDepois, versao);
     return;
   }
   if(novoStatus === "elaboracao"){
-    abrirComprador(id, reabrirDrawerDepois, false);
+    abrirComprador(id, reabrirDrawerDepois, false, versao);
     return;
   }
   if(novoStatus === "enviado"){
-    abrirDataEntrega(id, reabrirDrawerDepois);
+    abrirDataEntrega(id, reabrirDrawerDepois, versao);
     return;
   }
-  // Recebido de uma vez: tudo o que foi pedido chegou.
-  if(novoStatus === "recebido") (r.itens || []).forEach(i=>{ i.recebido = i.quantidade; });
-  r.status = novoStatus;
-  r.historico.push({status:novoStatus, data:new Date(), usuario: usuarioAtualNome() || "Não identificado"});
+  concluirOperacao(opMudarStatus(id, versao, novoStatus), reabrirDrawerDepois ? id : null);
+}
+// Depois de qualquer operação: avisa se não gravou e atualiza a tela. Devolve true se gravou.
+function concluirOperacao(resultado, idParaReabrir){
+  if(!resultado.ok) mostrarAviso(resultado.erro, "erro");
   renderTabela();
   renderKanban();
   renderKPIs();
-  if(reabrirDrawerDepois) abrirDrawer(r.id);
+  if(idParaReabrir) abrirDrawer(idParaReabrir);
+  return resultado.ok;
+}
+// Conforto de tela: o botão fica desabilitado enquanto a gravação não termina, evitando clique duplo.
+// A proteção de verdade são a versão e a chave de envio nas operações. Se a ação devolver uma Promise
+// (quando a gravação passar a esperar o Firebase), o botão só volta quando ela terminar.
+function comBotaoTravado(btn, acao){
+  if(btn.disabled) return;
+  btn.disabled = true;
+  let retorno;
+  try{ retorno = acao(); }
+  catch(e){ btn.disabled = false; throw e; }
+  if(retorno && typeof retorno.then === "function") return retorno.finally(()=>{ btn.disabled = false; });
+  btn.disabled = false;
 }
 
 // ---------- AVISO NA TELA (substitui o alert() do navegador) ----------
@@ -2017,12 +2257,14 @@ const recebimentoErro = document.getElementById("recebimentoErro");
 const recebimentoObs = document.getElementById("recebimentoObs");
 let idPendenteRecebimento = null;
 let reabrirDrawerAposRecebimento = false;
+let versaoVistaRecebimento = null;
 
-function abrirRecebimento(id, reabrirDrawerDepois){
-  const r = REQUISICOES.find(x=>x.id===id);
+function abrirRecebimento(id, reabrirDrawerDepois, versaoVista){
+  const r = obterRequisicao(id);
   if(!r) return;
   idPendenteRecebimento = id;
   reabrirDrawerAposRecebimento = !!reabrirDrawerDepois;
+  versaoVistaRecebimento = versaoVista != null ? versaoVista : r.versao;
   const temItens = !!(r.itens && r.itens.length);
   document.getElementById("recebimentoTitulo").textContent = `Registrar recebimento parcial — ${r.id}`;
   document.getElementById("recebimentoItensWrap").style.display = temItens ? "" : "none";
@@ -2049,48 +2291,30 @@ document.getElementById("recebimentoClose").addEventListener("click", fecharRece
 document.getElementById("recebimentoVoltar").addEventListener("click", fecharRecebimento);
 recebimentoBackdrop.addEventListener("click", (e)=>{ if(e.target === recebimentoBackdrop) fecharRecebimento(); });
 
-document.getElementById("recebimentoConfirmar").addEventListener("click", ()=>{
-  const r = REQUISICOES.find(x=>x.id===idPendenteRecebimento);
+const btnRecebimentoConfirmar = document.getElementById("recebimentoConfirmar");
+btnRecebimentoConfirmar.addEventListener("click", ()=> comBotaoTravado(btnRecebimentoConfirmar, ()=>{
+  const id = idPendenteRecebimento;
+  const r = obterRequisicao(id);
   if(!r) return;
   const obs = recebimentoObs.value.trim();
-  const erro = (msg)=>{ recebimentoErro.textContent = msg; recebimentoErro.classList.add("show"); };
-  const itens = r.itens || [];
-  let completo = false;
-  let resumo = "";
-
-  if(itens.length){
-    const novos = [];
-    for(const inp of document.querySelectorAll("#recebimentoItens input")){
-      const item = itens[Number(inp.dataset.idx)];
-      const v = inp.value === "" ? 0 : Number(inp.value);
-      if(!isFinite(v) || v < 0) return erro(`Quantidade inválida em "${item.descricao}".`);
-      if(v > Number(item.quantidade)) return erro(`"${item.descricao}": recebido (${v}) maior que o pedido (${item.quantidade}).`);
-      novos.push(v);
-    }
-    if(novos.every(v=> v === 0)) return erro("Informe a quantidade recebida de pelo menos um item.");
-    if(novos.every((v, n)=> v === (Number(itens[n].recebido) || 0))) return erro("Nenhuma quantidade mudou desde o último registro.");
-    novos.forEach((v, n)=>{ itens[n].recebido = v; });
-    completo = itens.every(i=> Number(i.recebido) >= Number(i.quantidade));
-    resumo = itens.map(i=> `${i.descricao}: ${i.recebido} de ${i.quantidade}`).join("; ") + ".";
-  } else if(!obs){
-    return erro("Descreva o que chegou para registrar o recebimento parcial.");
+  const temItens = !!(r.itens && r.itens.length);
+  const quantidades = temItens
+    ? [...document.querySelectorAll("#recebimentoItens input")].map(inp=> inp.value === "" ? 0 : Number(inp.value))
+    : null;
+  const resultado = opRegistrarRecebimento(id, versaoVistaRecebimento, quantidades, obs);
+  // Erro de preenchimento: fica no modal para corrigir. Outro erro (ex.: alterada no meio): fecha e avisa.
+  if(!resultado.ok && obterRequisicao(id) && obterRequisicao(id).versao === versaoVistaRecebimento){
+    recebimentoErro.textContent = resultado.erro;
+    recebimentoErro.classList.add("show");
+    return;
   }
-
-  const novoStatus = completo ? "recebido" : "recebido_parcial";
-  r.status = novoStatus;
-  r.historico.push({
-    status: novoStatus, data: new Date(), usuario: usuarioAtualNome() || "Não identificado",
-    motivo: [completo ? "Todos os itens recebidos." : resumo, obs].filter(Boolean).join(" "),
-  });
   const reabrir = reabrirDrawerAposRecebimento;
   recebimentoBackdrop.classList.remove("open");
   idPendenteRecebimento = null;
-  renderTabela();
-  renderKanban();
-  renderKPIs();
-  if(completo) mostrarAviso(`Todos os itens de ${r.id} chegaram: requisição marcada como Recebido.`);
-  if(reabrir) abrirDrawer(r.id);
-});
+  if(concluirOperacao(resultado, reabrir ? id : null) && resultado.r.status === "recebido"){
+    mostrarAviso(`Todos os itens de ${resultado.r.id} chegaram: requisição marcada como Recebido.`);
+  }
+}));
 
 // ---------- DATA PREVISTA DE ENTREGA ----------
 // Quem finaliza a compra (comprador ou auxiliar) preenche essa data ao mover pra "Enviado" — é
@@ -2103,11 +2327,15 @@ const dataEntregaTitulo = document.getElementById("dataEntregaTitulo");
 const dataEntregaConfirmarBtn = document.getElementById("dataEntregaConfirmar");
 let idPendenteEntrega = null;
 let reabrirDrawerAposEntrega = false;
+let versaoVistaEntrega = null;
+let entregaEhEdicao = false;
 
-function abrirDataEntrega(id, reabrirDrawerDepois){
+function abrirDataEntrega(id, reabrirDrawerDepois, versaoVista){
   idPendenteEntrega = id;
   reabrirDrawerAposEntrega = !!reabrirDrawerDepois;
-  const r = REQUISICOES.find(x=>x.id===id);
+  const r = obterRequisicao(id);
+  versaoVistaEntrega = versaoVista != null ? versaoVista : (r ? r.versao : null);
+  entregaEhEdicao = !!(r && ["enviado","recebido_parcial","nao_recebido","recebido"].includes(r.status));
   const eEdicao = !!(r && ["enviado","recebido_parcial","nao_recebido","recebido"].includes(r.status));
   const precisaComprador = !eEdicao && !(r && r.compradorResponsavel);
   document.getElementById("dataEntregaCompradorWrap").style.display = precisaComprador ? "" : "none";
@@ -2131,9 +2359,9 @@ document.getElementById("dataEntregaClose").addEventListener("click", fecharData
 document.getElementById("dataEntregaVoltar").addEventListener("click", fecharDataEntrega);
 dataEntregaBackdrop.addEventListener("click", (e)=>{ if(e.target === dataEntregaBackdrop) fecharDataEntrega(); });
 
-document.getElementById("dataEntregaConfirmar").addEventListener("click", ()=>{
+dataEntregaConfirmarBtn.addEventListener("click", ()=> comBotaoTravado(dataEntregaConfirmarBtn, ()=>{
   const valor = dataEntregaInput.value;
-  const rAlvo = REQUISICOES.find(x=>x.id===idPendenteEntrega);
+  const id = idPendenteEntrega;
   const pedeComprador = document.getElementById("dataEntregaCompradorWrap").style.display !== "none";
   const nomeComprador = document.getElementById("dataEntregaComprador").value.trim();
   if(pedeComprador && !nomeComprador){
@@ -2146,53 +2374,26 @@ document.getElementById("dataEntregaConfirmar").addEventListener("click", ()=>{
     dataEntregaErro.classList.add("show");
     return;
   }
-  const r = rAlvo;
   const reabrir = reabrirDrawerAposEntrega;
-  if(r){
-    const novaData = new Date(valor + "T00:00:00");
-    if(r.status === "pendente" || r.status === "elaboracao"){
-      // Primeira vez: finalizando a compra e enviando ao fornecedor.
-      r.dataPrevistaEntrega = novaData;
-      r.status = "enviado";
-      const entradaEnvio = {status:"enviado", data:new Date(), usuario: usuarioAtualNome() || "Não identificado"};
-      if(pedeComprador){
-        r.compradorResponsavel = nomeComprador;
-        entradaEnvio.motivo = `Comprador responsável: ${nomeComprador}.`;
-      }
-      r.historico.push(entradaEnvio);
-    } else {
-      // Edição de uma data já existente (pedido já enviado, ou marcado como não recebido e o
-      // fornecedor combinou um novo prazo) — não mexe no status de "Recebido"/"Cancelado".
-      const statusAnterior = r.status;
-      r.dataPrevistaEntrega = novaData;
-      if(statusAnterior === "nao_recebido") r.status = "enviado";
-      r.historico.push({
-        status: r.status, data:new Date(), usuario: usuarioAtualNome() || "Não identificado",
-        motivo:`Data de entrega atualizada para ${fmtData(novaData)}${statusAnterior==="nao_recebido" ? " — voltou para Enviado" : ""}.`,
-      });
-    }
-  }
+  // Primeira vez (Pendente/Elaboração → Enviado) ou edição de uma data já combinada.
+  const resultado = entregaEhEdicao
+    ? opAlterarDataEntrega(id, versaoVistaEntrega, valor)
+    : opConfirmarEnvio(id, versaoVistaEntrega, valor, pedeComprador ? nomeComprador : "");
   dataEntregaBackdrop.classList.remove("open");
   idPendenteEntrega = null;
-  if(r){
-    verificarPrazosEntrega();
-    renderTabela();
-    renderKanban();
-    renderKPIs();
-    if(reabrir) abrirDrawer(r.id);
-  }
-});
+  concluirOperacao(resultado, reabrir ? id : null);
+}));
 
 document.getElementById("reqStatusSalvar").addEventListener("click", ()=>{
   if(!requisicaoAtualId) return;
   const novoStatus = document.getElementById("reqStatusSelect").value;
-  tentarMudarStatus(requisicaoAtualId, novoStatus, true);
+  tentarMudarStatus(requisicaoAtualId, novoStatus, true, versaoNaTela);
 });
 document.getElementById("reqStatusCancelar").addEventListener("click", ()=>{
   if(!requisicaoAtualId) return;
-  const r = REQUISICOES.find(x=>x.id===requisicaoAtualId);
+  const r = obterRequisicao(requisicaoAtualId);
   if(!r) return;
-  tentarMudarStatus(r.id, r.status === "cancelado" ? "pendente" : "cancelado", true);
+  tentarMudarStatus(r.id, r.status === "cancelado" ? "pendente" : "cancelado", true, versaoNaTela);
 });
 
 // ---------- HISTÓRICO DE ALTERAÇÕES (modal à parte) ----------
@@ -2201,7 +2402,7 @@ document.getElementById("reqStatusCancelar").addEventListener("click", ()=>{
 // quem fez (ou "Sistema (automático)" quando foi o prazo de entrega vencendo sozinho).
 const historicoBackdrop = document.getElementById("historicoBackdrop");
 function abrirHistorico(id){
-  const r = REQUISICOES.find(x=>x.id===id);
+  const r = obterRequisicao(id);
   if(!r) return;
   document.getElementById("historicoTitulo").textContent = `Histórico de alterações — ${r.id}`;
   const lista = document.getElementById("historicoLista");
@@ -2236,10 +2437,13 @@ let idPendenteCancelamento = null;
 let reabrirDrawerAposCancelamento = false;
 // O mesmo modal de motivo serve para cancelar e para reabrir uma cancelada ("cancelar" | "reabrir").
 let modoMotivo = "cancelar";
+let versaoVistaMotivo = null;
 
-function abrirMotivoCancelamento(id, reabrirDrawerDepois, modo){
+function abrirMotivoCancelamento(id, reabrirDrawerDepois, modo, versaoVista){
   idPendenteCancelamento = id;
   reabrirDrawerAposCancelamento = !!reabrirDrawerDepois;
+  const rAtual = obterRequisicao(id);
+  versaoVistaMotivo = versaoVista != null ? versaoVista : (rAtual ? rAtual.versao : null);
   modoMotivo = modo === "reabrir" ? "reabrir" : "cancelar";
   const reabrindo = modoMotivo === "reabrir";
   document.getElementById("motivoCancelTitulo").textContent = reabrindo ? "Reabrir requisição" : "Motivo do cancelamento";
@@ -2266,36 +2470,23 @@ document.getElementById("motivoCancelClose").addEventListener("click", fecharMot
 document.getElementById("motivoCancelVoltar").addEventListener("click", fecharMotivoCancelamento);
 motivoCancelBackdrop.addEventListener("click", (e)=>{ if(e.target === motivoCancelBackdrop) fecharMotivoCancelamento(); });
 
-document.getElementById("motivoCancelConfirmar").addEventListener("click", ()=>{
+const btnMotivoConfirmar = document.getElementById("motivoCancelConfirmar");
+btnMotivoConfirmar.addEventListener("click", ()=> comBotaoTravado(btnMotivoConfirmar, ()=>{
   const motivo = motivoCancelTexto.value.trim();
   if(!motivo){
     motivoCancelErro.textContent = modoMotivo === "reabrir" ? "Descreva o motivo da reabertura para continuar." : "Descreva o motivo do cancelamento para continuar.";
     motivoCancelErro.classList.add("show");
     return;
   }
-  const r = REQUISICOES.find(x=>x.id===idPendenteCancelamento);
+  const id = idPendenteCancelamento;
   const reabrir = reabrirDrawerAposCancelamento;
-  if(r && modoMotivo === "reabrir"){
-    // Reabrir começa um ciclo de compra novo: o que foi recebido e a data combinada antes não valem mais.
-    r.status = "pendente";
-    r.motivoCancelamento = "";
-    r.dataPrevistaEntrega = null;
-    (r.itens || []).forEach(i=>{ delete i.recebido; });
-    r.historico.push({status:"pendente", data:new Date(), motivo:`Reaberta: ${motivo}`, usuario: usuarioAtualNome() || "Não identificado"});
-  } else if(r){
-    r.status = "cancelado";
-    r.motivoCancelamento = motivo;
-    r.historico.push({status:"cancelado", data:new Date(), motivo, usuario: usuarioAtualNome() || "Não identificado"});
-  }
+  const resultado = modoMotivo === "reabrir"
+    ? opReabrir(id, versaoVistaMotivo, motivo)
+    : opCancelar(id, versaoVistaMotivo, motivo);
   motivoCancelBackdrop.classList.remove("open");
   idPendenteCancelamento = null;
-  if(r){
-    renderTabela();
-    renderKanban();
-    renderKPIs();
-    if(reabrir) abrirDrawer(r.id);
-  }
-});
+  concluirOperacao(resultado, reabrir ? id : null);
+}));
 
 // ---------- COMPRADOR RESPONSÁVEL (obrigatório ao entrar em "Elaboração de pedido") ----------
 // Quem assume a compra se identifica aqui; o nome aparece no topo da requisição pra o solicitante
@@ -2306,16 +2497,18 @@ const compradorErro = document.getElementById("compradorErro");
 let idPendenteComprador = null;
 let reabrirDrawerAposComprador = false;
 let compradorModoEdicao = false;
+let versaoVistaComprador = null;
 
 function popularListaCompradores(){
   const nomes = [...new Set([COMPRADOR_SEED, ...REQUISICOES.map(x=>x.compradorResponsavel).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   document.getElementById("listaCompradores").innerHTML = nomes.map(n=>`<option value="${escapeHtml(n).replace(/"/g,'&quot;')}">`).join("");
 }
-function abrirComprador(id, reabrirDrawerDepois, edicao){
+function abrirComprador(id, reabrirDrawerDepois, edicao, versaoVista){
   idPendenteComprador = id;
   reabrirDrawerAposComprador = !!reabrirDrawerDepois;
   compradorModoEdicao = !!edicao;
-  const r = REQUISICOES.find(x=>x.id===id);
+  const r = obterRequisicao(id);
+  versaoVistaComprador = versaoVista != null ? versaoVista : (r ? r.versao : null);
   popularListaCompradores();
   document.getElementById("compradorTitulo").textContent = edicao ? "Alterar comprador responsável" : "Comprador responsável";
   document.getElementById("compradorConfirmar").textContent = edicao ? "Salvar" : "Confirmar";
@@ -2339,41 +2532,25 @@ document.getElementById("compradorVoltar").addEventListener("click", fecharCompr
 compradorBackdrop.addEventListener("click", (e)=>{ if(e.target === compradorBackdrop) fecharComprador(); });
 compradorInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") document.getElementById("compradorConfirmar").click(); });
 document.getElementById("btnAlterarComprador").addEventListener("click", ()=>{
-  if(requisicaoAtualId) abrirComprador(requisicaoAtualId, true, true);
+  if(requisicaoAtualId) abrirComprador(requisicaoAtualId, true, true, versaoNaTela);
 });
-document.getElementById("compradorConfirmar").addEventListener("click", ()=>{
+const btnCompradorConfirmar = document.getElementById("compradorConfirmar");
+btnCompradorConfirmar.addEventListener("click", ()=> comBotaoTravado(btnCompradorConfirmar, ()=>{
   const nome = compradorInput.value.trim();
   if(!nome){
     compradorErro.textContent = "Informe o comprador responsável para continuar.";
     compradorErro.classList.add("show");
     return;
   }
-  const r = REQUISICOES.find(x=>x.id===idPendenteComprador);
+  const id = idPendenteComprador;
   const reabrir = reabrirDrawerAposComprador;
-  if(r){
-    const quem = usuarioAtualNome() || "Não identificado";
-    if(compradorModoEdicao){
-      const anterior = r.compradorResponsavel;
-      if(nome !== anterior){
-        r.compradorResponsavel = nome;
-        r.historico.push({status:r.status, data:new Date(), usuario:quem,
-          motivo:`Comprador responsável alterado${anterior ? " de " + anterior : ""} para ${nome}.`});
-      }
-    } else {
-      r.compradorResponsavel = nome;
-      r.status = "elaboracao";
-      r.historico.push({status:"elaboracao", data:new Date(), usuario:quem, motivo:`Comprador responsável: ${nome}.`});
-    }
-  }
+  const resultado = compradorModoEdicao
+    ? opAlterarComprador(id, versaoVistaComprador, nome)
+    : opAssumirCompra(id, versaoVistaComprador, nome);
   compradorBackdrop.classList.remove("open");
   idPendenteComprador = null;
-  if(r){
-    renderTabela();
-    renderKanban();
-    renderKPIs();
-    if(reabrir) abrirDrawer(r.id);
-  }
-});
+  concluirOperacao(resultado, reabrir ? id : null);
+}));
 
 // ---------- FILTROS RECOLHÍVEIS (celular) ----------
 // No computador a barra de filtros fica sempre visível; no celular ela fica recolhida atrás do botão
@@ -2475,7 +2652,7 @@ function gerarXlsxItens(r){
   ]);
 }
 document.getElementById("btnBaixarItens").addEventListener("click", ()=>{
-  const r = REQUISICOES.find(x=>x.id===requisicaoAtualId);
+  const r = obterRequisicao(requisicaoAtualId);
   if(!r || !r.itens || !r.itens.length) return;
   const url = URL.createObjectURL(gerarXlsxItens(r));
   const a = document.createElement("a");
@@ -2813,11 +2990,14 @@ function preencherItensRapidos(itens){
 // null = criando uma requisição nova; com um id, o modal está editando essa requisição existente
 // (só é permitido abrir em modo edição enquanto ela ainda está Pendente).
 let modoEdicaoId = null;
+let versaoVistaEdicao = null;
+let chaveNovaRequisicao = null; // gerada a cada abertura do formulário de nova requisição
 const modalTituloEl = document.getElementById("modalTitulo");
 const modalCriarBtn = document.getElementById("modalCriar");
 
 function abrirModalNovaRequisicao(){
   modoEdicaoId = null;
+  chaveNovaRequisicao = novaChaveEnvio();
   modalTituloEl.textContent = "Nova Requisição de Compra";
   modalCriarBtn.textContent = "Criar requisição";
   // Quem abre a requisição normalmente é quem pede: já vem preenchido com o usuário do "👤" (pode trocar).
@@ -2839,10 +3019,11 @@ function abrirModalNovaRequisicao(){
 // Reabre o mesmo modal, agora pré-preenchido, pra corrigir algo (nome de projeto errado, observação
 // incompleta etc.) antes que a requisição saia de Pendente. Anexos já enviados continuam apontando
 // pro arquivo/foto original (têm .url); só arquivos novos escolhidos aqui viram upload de verdade.
-function abrirModalEdicao(id){
-  const r = REQUISICOES.find(x=>x.id===id);
+function abrirModalEdicao(id, versaoVista){
+  const r = obterRequisicao(id);
   if(!r || r.status !== "pendente") return;
   modoEdicaoId = id;
+  versaoVistaEdicao = versaoVista != null ? versaoVista : r.versao;
   modalTituloEl.textContent = "Editar Requisição de Compra";
   modalCriarBtn.textContent = "Salvar alterações";
   document.getElementById("fSolicitante").value = r.solicitante || "";
@@ -2873,8 +3054,9 @@ function cancelarModal(){
 document.getElementById("btnNovaRequisicao").addEventListener("click", abrirModalNovaRequisicao);
 document.getElementById("btnEditarRequisicao").addEventListener("click", ()=>{
   const id = requisicaoAtualId;
+  const versao = versaoNaTela;
   fecharDrawer();
-  abrirModalEdicao(id);
+  abrirModalEdicao(id, versao);
 });
 
 // ---------- DUPLICAR REQUISIÇÃO ----------
@@ -2883,12 +3065,14 @@ document.getElementById("btnEditarRequisicao").addEventListener("click", ()=>{
 // usando "Editar requisição") e seguir o fluxo normal a partir daí.
 const duplicarBackdrop = document.getElementById("duplicarBackdrop");
 let idPendenteDuplicar = null;
+let chaveDuplicar = null; // gerada a cada confirmação aberta
 // Extraída pra função própria pra poder ser chamada tanto pelo botão do drawer quanto pelo menu
 // rápido "⋮" dos cards (que precisa disparar a confirmação sem passar pelo drawer nenhuma vez).
 function abrirConfirmacaoDuplicar(id){
-  const r = REQUISICOES.find(x=>x.id===id);
+  const r = obterRequisicao(id);
   if(!r) return;
   idPendenteDuplicar = r.id;
+  chaveDuplicar = novaChaveEnvio();
   document.getElementById("duplicarTexto").textContent =
     `Tem certeza que deseja duplicar a requisição ${r.id}? Os anexos não são copiados — a nova requisição entra como Pendente, com os demais dados iguais, pra revisar e ajustar o que for preciso.`;
   duplicarBackdrop.classList.add("open");
@@ -2901,30 +3085,15 @@ function fecharDuplicar(){
 document.getElementById("duplicarClose").addEventListener("click", fecharDuplicar);
 document.getElementById("duplicarNao").addEventListener("click", fecharDuplicar);
 duplicarBackdrop.addEventListener("click", (e)=>{ if(e.target === duplicarBackdrop) fecharDuplicar(); });
-document.getElementById("duplicarSim").addEventListener("click", ()=>{
-  const original = REQUISICOES.find(x=>x.id===idPendenteDuplicar);
+const btnDuplicarSim = document.getElementById("duplicarSim");
+btnDuplicarSim.addEventListener("click", ()=> comBotaoTravado(btnDuplicarSim, ()=>{
+  const idOriginal = idPendenteDuplicar;
+  const chave = chaveDuplicar;
   fecharDuplicar();
-  if(!original) return;
-  const copia = {
-    id: novoId(), data: new Date(),
-    solicitante: original.solicitante, origem: original.origem,
-    projetoNumero: original.projetoNumero, projetoNome: original.projetoNome,
-    prioridade: original.prioridade,
-    observacao: original.observacao,
-    anexos: [], // de propósito: cada compra deve levar seu próprio anexo/orçamento atualizado
-    faturamentoDireto: original.faturamentoDireto,
-    motivoCancelamento: "",
-    comentarios: [],
-    itens: (original.itens || []).map(i=>({...i})),
-    status: "pendente",
-    historico: [{status:"pendente", data:new Date(), usuario: usuarioAtualNome() || original.solicitante}],
-  };
-  REQUISICOES.unshift(copia);
-  renderTabela();
-  renderKanban();
-  renderKPIs();
-  abrirDrawer(copia.id);
-});
+  if(!idOriginal) return;
+  const resultado = opDuplicarRequisicao(chave, idOriginal);
+  concluirOperacao(resultado, resultado.ok ? resultado.r.id : null);
+}));
 
 // ---------- EXCLUIR REQUISIÇÃO ----------
 // Ação nova e irreversível — por isso sempre passa por uma confirmação antes de remover de verdade
@@ -2932,7 +3101,7 @@ document.getElementById("duplicarSim").addEventListener("click", ()=>{
 const excluirBackdrop = document.getElementById("excluirBackdrop");
 let idPendenteExcluir = null;
 function abrirConfirmacaoExcluir(id){
-  const r = REQUISICOES.find(x=>x.id===id);
+  const r = obterRequisicao(id);
   if(!r) return;
   idPendenteExcluir = id;
   document.getElementById("excluirTexto").textContent =
@@ -3014,7 +3183,7 @@ document.getElementById("modalClose").addEventListener("click", cancelarModal);
 document.getElementById("modalCancelar").addEventListener("click", cancelarModal);
 modalBackdrop.addEventListener("click", (e)=>{ if(e.target === modalBackdrop) cancelarModal(); });
 
-document.getElementById("modalCriar").addEventListener("click", ()=>{
+modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>{
   const solicitante = document.getElementById("fSolicitante").value.trim();
   const origem = fOrigem.value;
   const projetoNumero = fProjeto.value;
@@ -3044,64 +3213,26 @@ document.getElementById("modalCriar").addEventListener("click", ()=>{
   const projetoInfo = PROJETO_POR_NUMERO[projetoNumero];
   const anexosFinal = anexosSelecionados.map(f=> f.url ? f : ({name:f.name, url:criarUrlAnexo(f), type:f.type||""}));
 
-  if(modoEdicaoId){
-    // Editando uma requisição existente: atualiza os campos no lugar — mantém id, data de criação,
-    // status e comentários intactos, já que edição só é permitida ainda em Pendente. O histórico,
-    // porém, ganha uma entrada nova dizendo o que mudou — assim o botão "🕓 Histórico" também cobre edição.
-    const r = REQUISICOES.find(x=>x.id===modoEdicaoId);
-    modoEdicaoId = null;
-    if(r){
-      const novosValores = {solicitante, origem, projetoNumero, prioridade, observacao, faturamentoDireto};
-      const ROTULOS_CAMPO = {solicitante:"Solicitante", origem:"Origem", projetoNumero:"Nº do projeto", prioridade:"Prioridade", observacao:"Observação", faturamentoDireto:"Faturamento direto"};
-      const alterados = Object.keys(novosValores).filter(k=> String(r[k]) !== String(novosValores[k])).map(k=>ROTULOS_CAMPO[k]);
-      if(JSON.stringify((r.anexos||[]).map(a=>a.name)) !== JSON.stringify(anexosFinal.map(a=>a.name))) alterados.push("Anexo");
-      if(JSON.stringify(r.itens||[]) !== JSON.stringify(itens)) alterados.push("Itens informados");
+  const dados = {
+    solicitante, origem, projetoNumero, projetoNome: projetoInfo ? projetoInfo.nome : "",
+    prioridade, observacao, faturamentoDireto, anexos: anexosFinal, itens,
+  };
 
-      r.solicitante = solicitante;
-      r.origem = origem;
-      r.projetoNumero = projetoNumero;
-      r.projetoNome = projetoInfo ? projetoInfo.nome : "";
-      r.prioridade = prioridade;
-      r.observacao = observacao;
-      r.faturamentoDireto = faturamentoDireto;
-      r.anexos = anexosFinal;
-      r.itens = itens;
-      if(alterados.length){
-        r.historico.push({
-          status: r.status, data: new Date(), usuario: usuarioAtualNome() || "Não identificado", edicao:true,
-          motivo: `Campos alterados: ${alterados.join(", ")}.`,
-        });
-      }
-      renderTabela();
-      renderKanban();
-      renderKPIs();
-      fecharModal();
-      abrirDrawer(r.id);
-    } else {
-      fecharModal();
-    }
+  if(modoEdicaoId){
+    // Editando uma requisição existente: mantém id, data de criação, status e comentários. O histórico
+    // ganha uma entrada dizendo o que mudou. A operação confere de novo se ela ainda está Pendente.
+    const id = modoEdicaoId;
+    modoEdicaoId = null;
+    const resultado = opEditarRequisicao(id, versaoVistaEdicao, dados);
+    fecharModal();
+    concluirOperacao(resultado, id);
     return;
   }
 
-  const nova = {
-    id: novoId(), data: new Date(), solicitante, origem,
-    projetoNumero, projetoNome: projetoInfo ? projetoInfo.nome : "",
-    prioridade, observacao,
-    anexos: anexosFinal,
-    faturamentoDireto,
-    motivoCancelamento:"",
-    comentarios:[],
-    itens,
-    status:"pendente",
-    historico:[{status:"pendente", data:new Date(), usuario: usuarioAtualNome() || solicitante}],
-  };
-  REQUISICOES.unshift(nova);
-  renderTabela();
-  renderKanban();
-  renderKPIs();
+  const resultado = opCriarRequisicao(chaveNovaRequisicao, dados);
   fecharModal();
-  abrirDrawer(nova.id);
-});
+  concluirOperacao(resultado, resultado.r.id);
+}));
 
 // ---------- INICIALIZAÇÃO ----------
 renderKPIs();

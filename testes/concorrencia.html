@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes de concorrência</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --panel:#ffffff; --border:#e2e8f0; --text:#1f2937; --muted:#6b7280;
+    --ok:#15803d; --ok-bg:rgba(34,197,94,.12); --falha:#b91c1c; --falha-bg:rgba(239,68,68,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0f1720; --panel:#16212c; --border:#263544; --text:#e7edf3; --muted:#8b9baa;
+      --ok:#4ade80; --falha:#f87171; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; padding:24px 16px; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  main{max-width:900px; margin:0 auto;}
+  h1{font-size:20px; margin:0 0 6px;}
+  p{color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 12px;}
+  .resumo{font-size:15px; font-weight:700; padding:12px 14px; border-radius:10px; margin:16px 0; border:1px solid var(--border); background:var(--panel);}
+  .resumo.ok{color:var(--ok); background:var(--ok-bg);}
+  .resumo.falha{color:var(--falha); background:var(--falha-bg);}
+  table{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; font-size:13px;}
+  th, td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top;}
+  th{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+  td.st{font-weight:700; white-space:nowrap;}
+  td.st.ok{color:var(--ok);} td.st.falha{color:var(--falha);}
+  .det{color:var(--muted); font-size:12px;}
+  iframe{display:none;}
+</style>
+</head>
+<body>
+<main>
+  <h1>Testes de concorrência — Requisição de Compras</h1>
+  <p>Cada teste simula <b>duas pessoas</b> que abriram a mesma requisição (viram a mesma versão) e confirmam a ação ao mesmo tempo.
+     O resultado esperado é que <b>só uma tenha efeito</b> e a outra seja recusada, sem gravação pela metade nem registro duplicado.
+     Os testes rodam sobre os dados de exemplo da página, numa cópia carregada aqui dentro.</p>
+  <div class="resumo" id="resumo">Carregando a página…</div>
+  <table>
+    <thead><tr><th>Resultado</th><th>Teste</th><th>Detalhe</th></tr></thead>
+    <tbody id="resultados"></tbody>
+  </table>
+  <iframe id="app" title="Aplicação sob teste"></iframe>
+</main>
+<script>
+// O app guarda o "usuário" no navegador. Os testes rodam como gestor (pode marcar recebimento) e depois
+// devolvem o que estava salvo antes, para não mexer no seu usuário.
+const CHAVES_PERFIL = ["suprimentos-demo-requisicoes-usuario-nome", "suprimentos-demo-requisicoes-usuario-gestor"];
+const perfilOriginal = {};
+function guardarPerfil(){
+  CHAVES_PERFIL.forEach(k=>{ try{ perfilOriginal[k] = localStorage.getItem(k); }catch(e){} });
+  try{
+    localStorage.setItem(CHAVES_PERFIL[0], "Teste Automático");
+    localStorage.setItem(CHAVES_PERFIL[1], "1");
+  }catch(e){}
+}
+function restaurarPerfil(){
+  CHAVES_PERFIL.forEach(k=>{
+    try{ perfilOriginal[k] == null ? localStorage.removeItem(k) : localStorage.setItem(k, perfilOriginal[k]); }catch(e){}
+  });
+}
+
+const linhas = [];
+function registrar(nome, ok, detalhe){
+  linhas.push({nome, ok, detalhe});
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td class="st ${ok ? "ok" : "falha"}"></td><td></td><td class="det"></td>`;
+  tr.children[0].textContent = ok ? "✔ passou" : "✘ falhou";
+  tr.children[1].textContent = nome;
+  tr.children[2].textContent = detalhe;
+  document.getElementById("resultados").appendChild(tr);
+}
+
+function rodarTestes(w){
+  const estado = ()=> w.estadoParaTestes();
+  const usados = new Set();
+  const amanha = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+  const daquiDezDias = new Date(Date.now() + 10*86400000).toISOString().slice(0,10);
+  const ontem = new Date(Date.now() - 86400000);
+
+  // Pega uma requisição de exemplo ainda não usada em outro teste, no status pedido.
+  function pegar(status){
+    const r = estado().requisicoes.find(x=> x.status === status && !usados.has(x.id));
+    if(!r) throw new Error(`não há requisição de exemplo livre em "${status}"`);
+    usados.add(r.id);
+    return r;
+  }
+  function prepararEnviado(){
+    const r = pegar("elaboracao");
+    const res = w.opConfirmarEnvio(r.id, r.versao, daquiDezDias, "");
+    if(!res.ok) throw new Error("preparação falhou: " + res.erro);
+    return r;
+  }
+  function prepararCancelado(){
+    const r = pegar("pendente");
+    const res = w.opCancelar(r.id, r.versao, "preparação do teste");
+    if(!res.ok) throw new Error("preparação falhou: " + res.erro);
+    return r;
+  }
+  // Duas pessoas viram a mesma versão; as duas confirmam. Confere que exatamente uma gravou.
+  function duasAoMesmoTempo(r, acaoA, acaoB){
+    const versao = r.versao;
+    const historicoAntes = r.historico.length;
+    const a = acaoA(versao), b = acaoB(versao);
+    return {a, b, versao, novosNoHistorico: r.historico.length - historicoAntes};
+  }
+  function teste(nome, corpo){
+    try{
+      const {ok, detalhe} = corpo();
+      registrar(nome, ok, detalhe);
+    }catch(e){
+      registrar(nome, false, "Erro ao rodar: " + e.message);
+    }
+  }
+  const umaSo = (a, b)=> a.ok !== b.ok;
+
+  teste("Dois compradores assumem a mesma requisição (Pendente → Elaboração)", ()=>{
+    const r = pegar("pendente");
+    const x = duasAoMesmoTempo(r, v=> w.opAssumirCompra(r.id, v, "Ana"), v=> w.opAssumirCompra(r.id, v, "Bruno"));
+    return {ok: umaSo(x.a, x.b) && r.compradorResponsavel === "Ana" && x.novosNoHistorico === 1,
+      detalhe:`Comprador final: ${r.compradorResponsavel}; entradas novas no histórico: ${x.novosNoHistorico}; recusado: "${x.b.erro || "-"}"`};
+  });
+
+  teste("Uma pessoa cancela e outra assume a compra ao mesmo tempo", ()=>{
+    const r = pegar("pendente");
+    const x = duasAoMesmoTempo(r, v=> w.opCancelar(r.id, v, "não precisa mais"), v=> w.opAssumirCompra(r.id, v, "Bruno"));
+    return {ok: umaSo(x.a, x.b) && r.status === "cancelado" && !r.compradorResponsavel && x.novosNoHistorico === 1,
+      detalhe:`Status final: ${r.status}; comprador: ${r.compradorResponsavel || "(nenhum)"}; entradas novas: ${x.novosNoHistorico}`};
+  });
+
+  teste("Duas pessoas confirmam o envio com datas diferentes", ()=>{
+    const r = pegar("elaboracao");
+    const x = duasAoMesmoTempo(r, v=> w.opConfirmarEnvio(r.id, v, amanha, ""), v=> w.opConfirmarEnvio(r.id, v, daquiDezDias, ""));
+    const data = new Date(r.dataPrevistaEntrega).toISOString().slice(0,10);
+    return {ok: umaSo(x.a, x.b) && r.status === "enviado" && data === amanha && x.novosNoHistorico === 1,
+      detalhe:`Data gravada: ${data} (esperada ${amanha}); entradas novas: ${x.novosNoHistorico}`};
+  });
+
+  teste("Duas pessoas alteram a data de entrega ao mesmo tempo", ()=>{
+    const r = prepararEnviado();
+    const x = duasAoMesmoTempo(r, v=> w.opAlterarDataEntrega(r.id, v, amanha), v=> w.opAlterarDataEntrega(r.id, v, daquiDezDias));
+    const data = new Date(r.dataPrevistaEntrega).toISOString().slice(0,10);
+    return {ok: umaSo(x.a, x.b) && data === amanha && x.novosNoHistorico === 1,
+      detalhe:`Data gravada: ${data}; entradas novas: ${x.novosNoHistorico}`};
+  });
+
+  teste("Duas pessoas alteram o comprador ao mesmo tempo", ()=>{
+    const r = pegar("elaboracao");
+    const x = duasAoMesmoTempo(r, v=> w.opAlterarComprador(r.id, v, "Carla"), v=> w.opAlterarComprador(r.id, v, "Diego"));
+    const ultimo = r.historico[r.historico.length - 1].motivo;
+    return {ok: umaSo(x.a, x.b) && r.compradorResponsavel === "Carla" && x.novosNoHistorico === 1,
+      detalhe:`Comprador final: ${r.compradorResponsavel}; histórico: "${ultimo}"`};
+  });
+
+  teste("Duas pessoas registram recebimento parcial com quantidades diferentes", ()=>{
+    const r = prepararEnviado();
+    const qA = r.itens.map((i, n)=> n === 0 ? 1 : 0);
+    const qB = r.itens.map((i, n)=> n === 0 ? 2 : 0);
+    const x = duasAoMesmoTempo(r, v=> w.opRegistrarRecebimento(r.id, v, qA, ""), v=> w.opRegistrarRecebimento(r.id, v, qB, ""));
+    return {ok: umaSo(x.a, x.b) && r.itens[0].recebido === 1 && x.novosNoHistorico === 1,
+      detalhe:`Recebido no 1º item: ${r.itens[0].recebido} (esperado 1); status: ${r.status}; entradas novas: ${x.novosNoHistorico}`};
+  });
+
+  teste("Duas pessoas reabrem a mesma requisição cancelada", ()=>{
+    const r = prepararCancelado();
+    const x = duasAoMesmoTempo(r, v=> w.opReabrir(r.id, v, "voltou a valer"), v=> w.opReabrir(r.id, v, "projeto retomado"));
+    return {ok: umaSo(x.a, x.b) && r.status === "pendente" && x.novosNoHistorico === 1,
+      detalhe:`Status final: ${r.status}; entradas novas: ${x.novosNoHistorico}`};
+  });
+
+  teste("Solicitante edita enquanto o comprador assume a compra", ()=>{
+    const r = pegar("pendente");
+    const dados = {solicitante:r.solicitante, origem:r.origem, projetoNumero:r.projetoNumero, projetoNome:r.projetoNome,
+      prioridade:"urgente", observacao:r.observacao, faturamentoDireto:r.faturamentoDireto, anexos:r.anexos, itens:r.itens};
+    const x = duasAoMesmoTempo(r, v=> w.opAssumirCompra(r.id, v, "Ana"), v=> w.opEditarRequisicao(r.id, v, dados));
+    return {ok: umaSo(x.a, x.b) && r.status === "elaboracao" && r.prioridade !== "urgente",
+      detalhe:`Status: ${r.status}; prioridade: ${r.prioridade} (a edição atrasada não pode entrar); recusado: "${x.b.erro || "-"}"`};
+  });
+
+  teste("Prazo vencido processado por duas abas abertas ao mesmo tempo", ()=>{
+    const r = prepararEnviado();
+    r.dataPrevistaEntrega = ontem; // simula o prazo passando
+    const notifAntes = estado().notificacoes.length;
+    const x = duasAoMesmoTempo(r, v=> w.aplicarPrazoVencido(r.id, v), v=> w.aplicarPrazoVencido(r.id, v));
+    const novasNotif = estado().notificacoes.length - notifAntes;
+    return {ok: umaSo(x.a, x.b) && r.status === "nao_recebido" && x.novosNoHistorico === 1 && novasNotif === 1,
+      detalhe:`Status: ${r.status}; entradas novas: ${x.novosNoHistorico}; notificações novas: ${novasNotif}`};
+  });
+
+  teste("Solicitante marca Recebido no mesmo instante em que o prazo vence", ()=>{
+    const r = prepararEnviado();
+    r.dataPrevistaEntrega = ontem;
+    const notifAntes = estado().notificacoes.length;
+    const x = duasAoMesmoTempo(r, v=> w.opMudarStatus(r.id, v, "recebido"), v=> w.aplicarPrazoVencido(r.id, v));
+    const novasNotif = estado().notificacoes.length - notifAntes;
+    return {ok: umaSo(x.a, x.b) && r.status === "recebido" && novasNotif === 0,
+      detalhe:`Status final: ${r.status} (não pode voltar para Não recebido); notificações novas: ${novasNotif}`};
+  });
+
+  teste("Clique duplo em \"Criar requisição\" (mesma chave de envio)", ()=>{
+    const antes = estado().requisicoes.length;
+    const chave = w.novaChaveEnvio();
+    const dados = {solicitante:"Teste Automático", origem:"Obras", projetoNumero:"PRJ-2200", projetoNome:"Torre Corporate Plaza",
+      prioridade:"normal", observacao:"criada pelo teste", faturamentoDireto:false, anexos:[], itens:[{descricao:"Item de teste", modelo:"", quantidade:1}]};
+    const a = w.opCriarRequisicao(chave, dados), b = w.opCriarRequisicao(chave, dados);
+    const criadas = estado().requisicoes.length - antes;
+    return {ok: a.ok && b.ok && b.repetido === true && a.r.id === b.r.id && criadas === 1,
+      detalhe:`Requisições criadas: ${criadas}; as duas respostas apontam para ${a.r.id}`};
+  });
+
+  teste("Clique duplo em \"Sim, duplicar\" (mesma chave de envio)", ()=>{
+    const original = pegar("recebido");
+    const antes = estado().requisicoes.length;
+    const chave = w.novaChaveEnvio();
+    const a = w.opDuplicarRequisicao(chave, original.id), b = w.opDuplicarRequisicao(chave, original.id);
+    const criadas = estado().requisicoes.length - antes;
+    const semRecebido = a.r.itens.every(i=> i.recebido == null);
+    return {ok: a.ok && b.repetido === true && criadas === 1 && semRecebido,
+      detalhe:`Cópias criadas: ${criadas}; cópia nasce sem quantidades recebidas: ${semRecebido ? "sim" : "não"}`};
+  });
+
+  teste("Clique duplo em \"Comentar\" com @menção (mesma chave de envio)", ()=>{
+    const r = pegar("enviado");
+    const antesC = (r.comentarios || []).length, antesN = estado().notificacoes.length;
+    const chave = w.novaChaveEnvio();
+    const texto = "Chegou? @Fernanda Lima";
+    const a = w.opComentar(r.id, chave, "Teste Automático", texto, []), b = w.opComentar(r.id, chave, "Teste Automático", texto, []);
+    const novosC = r.comentarios.length - antesC, novasN = estado().notificacoes.length - antesN;
+    return {ok: a.ok && b.repetido === true && novosC === 1 && novasN === 1,
+      detalhe:`Comentários novos: ${novosC}; notificações de menção: ${novasN}`};
+  });
+
+  const falhas = linhas.filter(l=> !l.ok).length;
+  const resumo = document.getElementById("resumo");
+  resumo.textContent = falhas
+    ? `${falhas} de ${linhas.length} testes falharam.`
+    : `Todos os ${linhas.length} testes passaram: em cada caso, só uma das duas ações teve efeito.`;
+  resumo.className = "resumo " + (falhas ? "falha" : "ok");
+  document.title = (falhas ? "✘ " : "✔ ") + "Testes de concorrência";
+}
+
+guardarPerfil();
+const iframe = document.getElementById("app");
+iframe.addEventListener("load", ()=>{
+  try{
+    const w = iframe.contentWindow;
+    if(typeof w.estadoParaTestes !== "function") throw new Error("a página não expôs estadoParaTestes() — abra este arquivo por um endereço web (http), não direto do disco.");
+    rodarTestes(w);
+  }catch(e){
+    const resumo = document.getElementById("resumo");
+    resumo.textContent = "Não foi possível rodar os testes: " + e.message;
+    resumo.className = "resumo falha";
+  }finally{
+    restaurarPerfil();
+  }
+});
+iframe.src = "../index.html";
+</script>
+</body>
+</html>
