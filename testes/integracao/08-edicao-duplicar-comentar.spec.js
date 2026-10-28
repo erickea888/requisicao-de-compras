@@ -105,4 +105,17 @@ test.describe("8. Edição, duplicar e comentar", () => {
     await page.click("#btnEnviarComentario");
     expect((await requisicao(page, id)).comentarios.at(-1).texto.length).toBe(textoLongo.trim().length);
   });
+
+  test("8.6b quando o comentário passa de 20.000 caracteres, então vejo o aviso e nada é gravado (sem cortar em silêncio)", async ({ page }) => {
+    await abrirApp(page);
+    const id = await idEm(page, "enviado");
+    const antes = (await requisicao(page, id)).comentarios.length;
+    await page.evaluate((id) => abrirDrawer(id), id);
+    await page.locator("#comentarioTexto").click();
+    await page.keyboard.insertText("x".repeat(20001));
+    await page.click("#btnEnviarComentario");
+    await expect(page.locator("#comentarioErro")).toContainText("20.000");
+    expect((await requisicao(page, id)).comentarios.length).toBe(antes);
+    await expect(page.locator("#comentarioTexto")).toHaveValue("x".repeat(20001));
+  });
 });

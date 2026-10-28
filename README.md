@@ -22,6 +22,8 @@ A comunicação entre o departamento de suprimentos e as equipes que pedem mater
 - **Regra de permissão:** só quem pediu, ou um gestor, pode marcar Recebido / Não recebido, porque é quem sabe se a mercadoria chegou. Se o prazo de entrega vence sem confirmação, a requisição passa sozinha para "Não recebido" e o solicitante é avisado.
 - **Data de entrega prevista** editável a qualquer momento.
 - **Duas visões:** tabela (colunas ordenáveis) e Kanban com arrastar e soltar.
+- **Quem altera a requisição de outra pessoa:** editar, cancelar e excluir só pelo próprio solicitante, pelo gestor geral ou por usuários que o gestor seleciona numa lista geral (no 👤, marcando "Sou gestor"). Os demais não veem esses botões, e a operação recusa mesmo se forem chamadas.
+- **Itens** precisam ter quantidade maior que zero; com 0 ou negativa a requisição não é criada.
 - **Comentários** na requisição, com texto, anexo ou foto e **@menção**. O autor é sempre o usuário definido em 👤, o mesmo usado nas permissões e no histórico.
 - **Edição** enquanto a requisição está Pendente, **duplicar** com confirmação e **exclusão** pelo menu "⋮" de cada linha ou card.
 - **Histórico de alterações** em um modal, com quem mudou o quê e quando (inclui edição de campos).

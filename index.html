@@ -351,6 +351,10 @@
   .anexo-links-coluna{display:flex; flex-direction:column; gap:5px;}
   .btn-perigo{background:var(--danger) !important;}
   .form-erro{color:var(--danger); font-size:12px; margin:0 0 10px; display:none;}
+  .perfil-autorizados{display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:4px 12px; max-height:180px; overflow-y:auto; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2);}
+  .form-field .perfil-autorizado{display:flex; align-items:center; gap:6px; font-size:12.5px; margin:0; cursor:pointer;
+    text-transform:none; letter-spacing:normal; font-weight:400; color:var(--text);}
+  .perfil-autorizado input{width:auto;}
 
   .recebimento-tabela{width:100%; border-collapse:collapse; font-size:12.5px;}
   .recebimento-tabela th{text-align:left; font-size:11px; color:var(--muted); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--border);}
@@ -993,6 +997,11 @@
         <input type="checkbox" id="perfilGestorInput" style="width:auto;">
         <label for="perfilGestorInput" style="margin:0;">Sou gestor admin geral (posso alterar Recebido/Não recebido de qualquer requisição)</label>
       </div>
+      <div class="form-field full" id="perfilAutorizadosWrap" style="display:none; margin-top:12px;">
+        <label>Usuários selecionados</label>
+        <p class="form-hint" style="margin-bottom:6px;">Além do próprio solicitante e do gestor, só estas pessoas podem editar, cancelar e excluir requisições de outras pessoas.</p>
+        <div class="perfil-autorizados" id="perfilAutorizadosLista"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button type="button" class="req-btn" id="perfilVoltar">Fechar</button>
@@ -1556,6 +1565,35 @@ function podeAlterarRecebimento(r){
   const nome = normalizarNome(usuarioAtualNome());
   return !!nome && nome === normalizarNome(r.solicitante);
 }
+
+// ---------- USUÁRIOS SELECIONADOS PELO GESTOR ----------
+// Depois de criada, a requisição só pode ser editada, cancelada ou excluída pelo próprio solicitante,
+// pelo gestor geral ou por quem o gestor colocar nesta lista geral (ex.: a equipe de Suprimentos).
+// Quem não está na lista não tem permissão.
+// FIREBASE: a lista vira o documento config/permissoes, que só o gestor grava (FIREBASE-AJUSTES.md).
+const AUTORIZADOS_KEY = "suprimentos-demo-requisicoes-usuarios-autorizados";
+function usuariosAutorizados(){
+  try{
+    const lista = JSON.parse(localStorage.getItem(AUTORIZADOS_KEY) || "[]");
+    return Array.isArray(lista) ? lista : [];
+  }catch(e){ return []; }
+}
+function podeAlterarRequisicao(r){
+  if(usuarioAtualGestor()) return true;
+  const nome = normalizarNome(usuarioAtualNome());
+  if(!nome) return false;
+  return nome === normalizarNome(r.solicitante) || usuariosAutorizados().some(n=> normalizarNome(n) === nome);
+}
+function erroSemPermissao(r, acao){
+  return `Só ${r.solicitante} (quem pediu), o gestor geral ou usuários selecionados pelo gestor podem ${acao} a requisição ${r.id}.`;
+}
+function opDefinirUsuariosAutorizados(lista){
+  if(!usuarioAtualGestor()) return {ok:false, erro:"Só o gestor geral pode definir os usuários selecionados."};
+  const limpa = [...new Set((lista || []).map(n=> String(n).trim()).filter(Boolean))];
+  try{ localStorage.setItem(AUTORIZADOS_KEY, JSON.stringify(limpa)); }
+  catch(e){ return {ok:false, erro:"Não foi possível salvar a lista neste navegador."}; }
+  return {ok:true, lista:limpa};
+}
 function atualizarBadgePerfil(){
   const nome = usuarioAtualNome();
   const gestor = usuarioAtualGestor();
@@ -1564,9 +1602,22 @@ function atualizarBadgePerfil(){
 const perfilBackdrop = document.getElementById("perfilBackdrop");
 const perfilNomeInput = document.getElementById("perfilNomeInput");
 const perfilGestorInput = document.getElementById("perfilGestorInput");
+// A lista de selecionados só aparece para quem está marcado como gestor.
+function renderAutorizadosPerfil(){
+  const marcados = usuariosAutorizados().map(normalizarNome);
+  const nomes = [...new Set([...PESSOAS_PLATAFORMA, ...usuariosAutorizados()])].sort((a,b)=> a.localeCompare(b, "pt-BR"));
+  document.getElementById("perfilAutorizadosLista").innerHTML = nomes.map(n=>`
+    <label class="perfil-autorizado"><input type="checkbox" value="${escapeHtml(n)}" ${marcados.includes(normalizarNome(n)) ? "checked" : ""}> ${escapeHtml(n)}</label>`).join("");
+}
+function atualizarVisibilidadeAutorizados(){
+  document.getElementById("perfilAutorizadosWrap").style.display = perfilGestorInput.checked ? "" : "none";
+}
+perfilGestorInput.addEventListener("change", atualizarVisibilidadeAutorizados);
 function abrirPerfil(){
   perfilNomeInput.value = usuarioAtualNome();
   perfilGestorInput.checked = usuarioAtualGestor();
+  renderAutorizadosPerfil();
+  atualizarVisibilidadeAutorizados();
   document.getElementById("perfilErro").classList.remove("show");
   perfilBackdrop.classList.add("open");
 }
@@ -1581,6 +1632,11 @@ document.getElementById("perfilSalvar").addEventListener("click", ()=>{
     localStorage.setItem(PERFIL_NOME_KEY, nome);
     localStorage.setItem(PERFIL_GESTOR_KEY, perfilGestorInput.checked ? "1" : "0");
   }catch(e){}
+  if(perfilGestorInput.checked){
+    const selecionados = [...document.querySelectorAll("#perfilAutorizadosLista input:checked")].map(c=> c.value);
+    const res = opDefinirUsuariosAutorizados(selecionados);
+    if(!res.ok) mostrarAviso(res.erro, "erro");
+  }
   atualizarBadgePerfil();
   atualizarBadgeNotificacoes(); // trocou de usuário → as notificações exibidas também mudam
   fecharPerfil();
@@ -1697,7 +1753,9 @@ function abrirDrawer(id){
   }
   // Só dá pra editar os dados da requisição enquanto ela ainda está Pendente — depois que entra em
   // Elaboração de pedido, o comprador já está trabalhando em cima do que foi pedido originalmente.
-  document.getElementById("btnEditarRequisicao").style.display = r.status === "pendente" ? "" : "none";
+  // Editar só em Pendente e só para solicitante, gestor ou usuário selecionado (a operação confere de novo).
+  const podeAlterar = podeAlterarRequisicao(r);
+  document.getElementById("btnEditarRequisicao").style.display = (r.status === "pendente" && podeAlterar) ? "" : "none";
   document.getElementById("reqInfoSolicitante").textContent = r.solicitante;
   const projSub = escapeHtml(r.projetoNome ? `${r.projetoNome} · ${r.origem}` : r.origem);
   document.getElementById("reqInfoProjeto").innerHTML = `<b>${escapeHtml(r.projetoNumero)}</b><div class="table-subtext">${projSub}</div>`;
@@ -1784,7 +1842,7 @@ function abrirDrawer(id){
   document.getElementById("reqStatusSalvar").disabled = statusSelect.disabled;
   // Cancelada: o mesmo botão vira "Reabrir". Recebido: etapa final, sem botão.
   const btnCancelarReq = document.getElementById("reqStatusCancelar");
-  btnCancelarReq.style.display = r.status === "recebido" ? "none" : "";
+  btnCancelarReq.style.display = (r.status === "recebido" || (r.status !== "cancelado" && !podeAlterar)) ? "none" : "";
   btnCancelarReq.textContent = r.status === "cancelado" ? "↺ Reabrir requisição" : "Cancelar requisição";
   btnCancelarReq.classList.toggle("cancelar", r.status !== "cancelado");
   const avisoPermissaoEl = document.getElementById("reqStatusPermissaoAviso");
@@ -1911,6 +1969,9 @@ function atualizarMencaoDropdown(){
   const termo = match[1].toLowerCase();
   const candidatos = PESSOAS_PLATAFORMA.filter(nome=> nome.toLowerCase().includes(termo));
   if(!candidatos.length){ fecharMencaoDropdown(); return; }
+  // Menção já completa (o nome inteiro foi digitado): não há o que sugerir, e a lista aberta
+  // cobriria o botão "Comentar".
+  if(candidatos.some(nome=> nome.toLowerCase() === termo.trim())){ fecharMencaoDropdown(); return; }
   mencaoAtiva = true;
   mencaoDropdown.innerHTML = candidatos.map(nome=>`<div class="mencao-opcao" data-nome="${escapeHtml(nome)}">${escapeHtml(nome)}</div>`).join("");
   mencaoDropdown.style.display = "block";
@@ -1936,6 +1997,11 @@ btnEnviarComentario.addEventListener("click", ()=> comBotaoTravado(btnEnviarCome
 
   if(!autor){ erroEl.textContent = "Defina seu usuário no botão 👤 (no topo) para comentar."; erroEl.classList.add("show"); return; }
   if(!texto && !comentarioAnexos.length){ erroEl.textContent = "Escreva algo ou anexe um arquivo/foto."; erroEl.classList.add("show"); return; }
+  if(texto.length > MAX_COMENTARIO){
+    erroEl.textContent = `O comentário tem ${texto.length.toLocaleString("pt-BR")} caracteres e o limite é ${MAX_COMENTARIO.toLocaleString("pt-BR")}. Divida em mais de um comentário ou anexe o texto como arquivo.`;
+    erroEl.classList.add("show");
+    return;
+  }
   const arquivoGrande = comentarioAnexos.find(f=> f.size > MAX_ANEXO_BYTES);
   if(arquivoGrande){
     erroEl.textContent = `O arquivo "${arquivoGrande.name}" passa do limite de 10MB por arquivo.`;
@@ -1995,6 +2061,7 @@ function erroTransicao(r, novoStatus){
   if(STATUS_RESTRITOS.includes(novoStatus) && !podeAlterarRecebimento(r)){
     return `Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como "${STATUS_LABEL[novoStatus]}". Defina seu usuário no botão "👤" no topo da página.`;
   }
+  if(novoStatus === "cancelado" && !podeAlterarRequisicao(r)) return erroSemPermissao(r, "cancelar");
   return "";
 }
 function dataDeISO(valor){ return new Date(valor + "T00:00:00"); }
@@ -2103,11 +2170,18 @@ function opRegistrarRecebimento(id, versao, quantidades, obs){
     registrarHistorico(r, {status:r.status, motivo:[completo ? "Todos os itens recebidos." : resumo, obs].filter(Boolean).join(" ")});
   });
 }
+// Todo item precisa de quantidade maior que zero (regra 2.5). Devolve a mensagem de erro, ou "".
+function erroQuantidadeItens(itens){
+  const invalido = (itens || []).find(i=> !(Number(i.quantidade) > 0));
+  return invalido ? `A quantidade do item "${invalido.descricao}" precisa ser maior que zero.` : "";
+}
 // dados: {solicitante, origem, projetoNumero, projetoNome, prioridade, observacao, faturamentoDireto, anexos, itens}
 // Edição só vale enquanto a requisição estiver Pendente — conferido de novo na hora de gravar.
 function opEditarRequisicao(id, versao, dados){
   return gravarRequisicao(id, versao, r=>{
+    if(!podeAlterarRequisicao(r)) return erroSemPermissao(r, "editar");
     if(r.status !== "pendente") return `A requisição ${r.id} já saiu de Pendente (está em "${STATUS_LABEL[r.status]}") e não pode mais ser editada.`;
+    const erroItens = erroQuantidadeItens(dados.itens); if(erroItens) return erroItens;
     const ROTULOS_CAMPO = {solicitante:"Solicitante", origem:"Origem", projetoNumero:"Nº do projeto", prioridade:"Prioridade", observacao:"Observação", faturamentoDireto:"Faturamento direto"};
     const alterados = Object.keys(ROTULOS_CAMPO).filter(k=> String(r[k]) !== String(dados[k])).map(k=>ROTULOS_CAMPO[k]);
     if(JSON.stringify((r.anexos||[]).map(a=>a.name)) !== JSON.stringify(dados.anexos.map(a=>a.name))) alterados.push("Anexo");
@@ -2115,6 +2189,18 @@ function opEditarRequisicao(id, versao, dados){
     Object.assign(r, dados);
     if(alterados.length) registrarHistorico(r, {status:r.status, edicao:true, motivo:`Campos alterados: ${alterados.join(", ")}.`});
   });
+}
+
+// Exclusão: mesma conferência de versão das outras gravações, e só para quem pode alterar (regra 7.5).
+function opExcluirRequisicao(id, versao){
+  const r = obterRequisicao(id);
+  if(!r) return {ok:false, erro:"Esta requisição não existe mais (foi excluída)."};
+  if(versao != null && r.versao !== versao){
+    return {ok:false, erro:`A requisição ${r.id} foi alterada por outra ação enquanto você preenchia. Confira os dados e tente de novo.`};
+  }
+  if(!podeAlterarRequisicao(r)) return {ok:false, erro:erroSemPermissao(r, "excluir")};
+  REQUISICOES.splice(REQUISICOES.indexOf(r), 1);
+  return {ok:true, r};
 }
 
 // ---------- CHAVE DE ENVIO (evita duplicar por clique duplo ou envio repetido) ----------
@@ -2136,6 +2222,8 @@ function novaRequisicaoBase(chave, dados){
 function opCriarRequisicao(chave, dados){
   const existente = REQUISICOES.find(x=> x.chaveCriacao === chave);
   if(existente) return {ok:true, r:existente, repetido:true};
+  const erroItens = erroQuantidadeItens(dados.itens);
+  if(erroItens) return {ok:false, erro:erroItens};
   // FIREBASE: o número RC-0001… sai de um contador lido e gravado na mesma transação (FIREBASE-AJUSTES.md).
   const nova = novaRequisicaoBase(chave, dados);
   REQUISICOES.unshift(nova);
@@ -2157,6 +2245,9 @@ function opDuplicarRequisicao(chave, idOriginal){
   REQUISICOES.unshift(copia);
   return {ok:true, r:copia};
 }
+// Comentários podem trazer especificações longas (regra 8.6): teto alto, e acima dele a tela avisa em vez
+// de cortar o texto em silêncio. FIREBASE: repetir o teto nas Security Rules.
+const MAX_COMENTARIO = 20000;
 // Comentário não conflita com outras alterações (não usa versão), mas a mesma chave nunca grava duas vezes.
 // FIREBASE: comentários vão para a subcoleção requisicoes/{id}/comentarios/{chave}.
 function opComentar(id, chave, autor, texto, anexos){
@@ -2165,6 +2256,7 @@ function opComentar(id, chave, autor, texto, anexos){
   if(!r.comentarios) r.comentarios = [];
   const existente = r.comentarios.find(c=> c.chave === chave);
   if(existente) return {ok:true, r, comentario:existente, repetido:true};
+  if(texto.length > MAX_COMENTARIO) return {ok:false, erro:`O comentário passa do limite de ${MAX_COMENTARIO.toLocaleString("pt-BR")} caracteres.`};
   const mencionados = PESSOAS_PLATAFORMA.filter(nome=> texto.includes("@"+nome));
   const comentario = {chave, autor, texto, data:new Date(), anexos, mencionados};
   r.comentarios.push(comentario);
@@ -2667,7 +2759,7 @@ document.getElementById("btnBaixarItens").addEventListener("click", ()=>{
 // ---------- LIMITES DE TAMANHO DOS CAMPOS ----------
 // Evita textos gigantes (que travam a tela ou enchem o banco quando houver backend).
 (function(){
-  const limites = {fSolicitante:80, fProjeto:40, fObs:1000, comentarioTexto:1000,
+  const limites = {fSolicitante:80, fProjeto:40, fObs:1000,
                    compradorInput:80, dataEntregaComprador:80, perfilNomeInput:80, motivoCancelTexto:500};
   Object.keys(limites).forEach(id=>{ const el = document.getElementById(id); if(el) el.maxLength = limites[id]; });
 })();
@@ -3100,10 +3192,12 @@ btnDuplicarSim.addEventListener("click", ()=> comBotaoTravado(btnDuplicarSim, ()
 // da lista. Se a requisição excluída for a que está aberta no drawer, o drawer fecha junto.
 const excluirBackdrop = document.getElementById("excluirBackdrop");
 let idPendenteExcluir = null;
+let versaoVistaExcluir = null;
 function abrirConfirmacaoExcluir(id){
   const r = obterRequisicao(id);
   if(!r) return;
   idPendenteExcluir = id;
+  versaoVistaExcluir = r.versao;
   document.getElementById("excluirTexto").textContent =
     `Tem certeza que deseja excluir a requisição ${r.id} (${r.solicitante})? Essa ação não pode ser desfeita.`;
   excluirBackdrop.classList.add("open");
@@ -3115,17 +3209,16 @@ function fecharExcluir(){
 document.getElementById("excluirClose").addEventListener("click", fecharExcluir);
 document.getElementById("excluirCancelar").addEventListener("click", fecharExcluir);
 excluirBackdrop.addEventListener("click", (e)=>{ if(e.target === excluirBackdrop) fecharExcluir(); });
-document.getElementById("excluirConfirmar").addEventListener("click", ()=>{
+const btnExcluirConfirmar = document.getElementById("excluirConfirmar");
+btnExcluirConfirmar.addEventListener("click", ()=> comBotaoTravado(btnExcluirConfirmar, ()=>{
   const id = idPendenteExcluir;
+  const versao = versaoVistaExcluir;
   fecharExcluir();
-  const idx = REQUISICOES.findIndex(x=>x.id===id);
-  if(idx === -1) return;
-  REQUISICOES.splice(idx, 1);
-  if(requisicaoAtualId === id) fecharDrawer();
-  renderTabela();
-  renderKanban();
-  renderKPIs();
-});
+  if(!id) return;
+  const resultado = opExcluirRequisicao(id, versao);
+  if(resultado.ok && requisicaoAtualId === id) fecharDrawer();
+  concluirOperacao(resultado, null);
+}));
 
 // ---------- MENU RÁPIDO "⋮" (duplicar/excluir sem abrir o detalhe) ----------
 // Uma única menuzinha compartilhada entre Kanban e Tabela, reposicionada perto do botão clicado.
@@ -3138,6 +3231,9 @@ function fecharCardMenu(){
 }
 function abrirCardMenu(id, btnEl){
   cardMenuAlvoId = id;
+  // "Excluir" só aparece para quem pode (a operação confere de novo ao confirmar).
+  const r = obterRequisicao(id);
+  document.getElementById("cardMenuExcluir").style.display = (r && podeAlterarRequisicao(r)) ? "" : "none";
   cardMenu.classList.add("open");
   const rect = btnEl.getBoundingClientRect();
   const largura = cardMenu.offsetWidth || 150;
@@ -3202,14 +3298,16 @@ modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>
     erroEl.classList.add("show");
     return;
   }
-  erroEl.classList.remove("show");
-
   const linhasItem = [...itensLista.querySelectorAll(".item-row")].map(row=>({
     descricao: row.querySelector(".item-descricao").value.trim(),
     modelo: row.querySelector(".item-modelo").value.trim(),
     quantidade: Number(row.querySelector(".item-qtd").value) || 0,
   }));
-  const itens = linhasItem.filter(i=> i.descricao && i.quantidade > 0);
+  // Linha totalmente vazia é ignorada; item descrito precisa de quantidade maior que zero.
+  const itens = linhasItem.filter(i=> i.descricao);
+  const erroItens = erroQuantidadeItens(itens);
+  if(erroItens){ erroEl.textContent = erroItens; erroEl.classList.add("show"); return; }
+  erroEl.classList.remove("show");
   const projetoInfo = PROJETO_POR_NUMERO[projetoNumero];
   const anexosFinal = anexosSelecionados.map(f=> f.url ? f : ({name:f.name, url:criarUrlAnexo(f), type:f.type||""}));
 
@@ -3231,7 +3329,7 @@ modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>
 
   const resultado = opCriarRequisicao(chaveNovaRequisicao, dados);
   fecharModal();
-  concluirOperacao(resultado, resultado.r.id);
+  concluirOperacao(resultado, resultado.ok ? resultado.r.id : null);
 }));
 
 // ---------- INICIALIZAÇÃO ----------

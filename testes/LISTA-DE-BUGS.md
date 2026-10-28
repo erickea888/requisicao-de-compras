@@ -1,27 +1,20 @@
 # Lista de bugs encontrados pelos testes de integração
 
-Os testes abaixo **falham de propósito**: o comportamento esperado foi definido pelo Erick e o app ainda não segue. Eles ficam falhando até o app ser corrigido. É proibido apagar, pular ou afrouxar esses testes para fazê-los passar.
+Quando um teste falha por bug real, ele **continua falhando** e o bug entra aqui até ser corrigido no app. É proibido apagar, pular ou afrouxar um teste para fazê-lo passar.
 
 Rodar todos os testes: `npm test`
 
-Última rodada: **64 testes, 53 passam e 11 falham**.
+Última rodada: **65 testes, 65 passam.** Não há bug aberto.
 
-## Regras novas, definidas e ainda não implementadas
+## Corrigidos
 
-| # | Comportamento esperado | Hoje | Testes |
+| # | O que os testes acharam | Correção | Testes |
 |---|---|---|---|
-| 1 | **2.5** Item com quantidade 0 ou negativa impede criar a requisição, com mensagem de erro. | O item é descartado em silêncio e a requisição é criada. | `02-criar` › 2.5 (0 e -2) |
-| 2 | **7.3** Só o solicitante, o gestor geral ou usuários **selecionados pelo gestor** editam a requisição. | Qualquer pessoa edita. | `07-acesso-indevido` › 7.3 |
-| 3 | **7.4** Só o solicitante, o gestor geral ou usuários selecionados cancelam. | Qualquer pessoa cancela. | `07-acesso-indevido` › 7.4 |
-| 4 | **7.5** Só o solicitante, o gestor geral ou usuários selecionados excluem. | Qualquer pessoa exclui. | `07-acesso-indevido` › 7.5 |
-| 5 | **7.6** A lista geral de usuários selecionados existe e só o gestor geral a altera. | A lista não existe (`opDefinirUsuariosAutorizados`). | `07-acesso-indevido` › 7.3, 7.4, 7.5 (selecionado) e 7.6 |
-
-## Bugs
-
-| # | Bug | Como reproduzir | Teste |
-|---|---|---|---|
-| 6 | **A lista de sugestões de @menção cobre o botão "Comentar".** Quando o texto termina numa menção completa (ex.: "Chegou? @Fernanda Lima"), a lista continua aberta sobre o botão, e o clique cai na sugestão em vez de enviar. | Abrir uma requisição, digitar um comentário terminando em "@Fernanda Lima" e tentar clicar em Comentar. | `08-edicao-duplicar-comentar` › 8.5 |
-| 7 | **Comentário cortado em 1.000 caracteres.** Pela regra 8.6, comentários não têm limite (especificações podem ser longas). Hoje o campo aceita só 1.000 caracteres, e o texto colado acima disso é cortado sem aviso. **Atenção:** esse limite foi colocado na revisão de segurança (SEGURANCA.md, achado 6), então a correção precisa definir um teto alto ou nenhum. | Colar um texto de 5.000 caracteres no comentário e enviar. | `08-edicao-duplicar-comentar` › 8.6 |
+| 1 | Item com quantidade 0 ou negativa era descartado em silêncio e a requisição era criada. | O formulário e a operação recusam, com a mensagem "A quantidade do item … precisa ser maior que zero". | `02-criar` › 2.5 |
+| 2 | Qualquer pessoa editava, cancelava e excluía a requisição de outra. | Só o solicitante, o gestor geral ou usuários selecionados pelo gestor. Os demais não veem os botões, e a operação recusa mesmo se for chamada. | `07-acesso-indevido` › 7.3, 7.4, 7.5 |
+| 3 | Não existia a lista de usuários selecionados. | O gestor marca as pessoas no 👤 (aparece ao marcar "Sou gestor"). Só o gestor altera a lista. | `07-acesso-indevido` › 7.3 a 7.6 |
+| 4 | A lista de sugestões de @menção ficava aberta sobre o botão "Comentar" quando o texto terminava numa menção completa. | A lista fecha quando o nome digitado já está completo. | `08-edicao-duplicar-comentar` › 8.5 |
+| 5 | Comentário cortado em 1.000 caracteres, sem aviso. | Teto de 20.000 caracteres (decisão do Erick); acima disso a tela avisa e não corta. | `08-edicao-duplicar-comentar` › 8.6 |
 
 ## Correções feitas no próprio teste (não no comportamento esperado)
 
