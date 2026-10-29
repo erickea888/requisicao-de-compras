@@ -24,6 +24,8 @@ A comunicação entre o departamento de suprimentos e as equipes que pedem mater
 - **Duas visões:** tabela (colunas ordenáveis) e Kanban com arrastar e soltar.
 - **Quem altera a requisição de outra pessoa:** editar, cancelar e excluir só pelo próprio solicitante, pelo gestor geral ou por usuários que o gestor seleciona numa lista geral (no 👤, marcando "Sou gestor"). Os demais não veem esses botões, e a operação recusa mesmo se forem chamadas.
 - **Itens** precisam ter quantidade maior que zero; com 0 ou negativa a requisição não é criada.
+- **Painel de Tarefas** (botão 🗓 Tarefas): para quem faz a mesma compra todo mês ou toda semana. Cada tarefa tem descrição, data e hora de envio, lembrete (10 ou 30 minutos, 1 hora ou 1 dia antes, no sino) e recorrência (todo dia, toda semana, 1 ou 2 vezes no mês). No dia, "Gerar requisição" abre o formulário preenchido; ao criar, a tarefa vira Realizada e a próxima data já fica Pendente. O painel mostra o mês anterior, o atual e o próximo (com as datas previstas da recorrência).
+- **"Gerar tarefa?"** ao criar uma requisição: com "Sim", ela vira modelo de uma tarefa e você ajusta a recorrência; com "Não", segue o fluxo normal.
 - **Comentários** na requisição, com texto, anexo ou foto e **@menção**. O autor é sempre o usuário definido em 👤, o mesmo usado nas permissões e no histórico.
 - **Edição** enquanto a requisição está Pendente, **duplicar** com confirmação e **exclusão** pelo menu "⋮" de cada linha ou card.
 - **Histórico de alterações** em um modal, com quem mudou o quê e quando (inclui edição de campos).

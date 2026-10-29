@@ -395,6 +395,58 @@
   .camera-preview-wrap{background:#000; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:220px;}
   #cameraVideo{width:100%; max-height:60vh; display:block;}
 
+  /* ---------- Painel de Tarefas ---------- */
+  .header-acoes{display:flex; gap:10px; flex-wrap:wrap;}
+  .btn-sec{
+    display:flex; align-items:center; gap:6px; padding:10px 16px; border-radius:9px; border:1px solid var(--border);
+    background:var(--panel); color:var(--text); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; flex:none; position:relative;
+  }
+  .btn-sec:hover{border-color:var(--accent); color:var(--accent);}
+  .btn-sec .notif-badge{position:static; margin-left:2px;}
+  .modal.modal-largo{width:min(1080px,96vw);}
+  .tarefas-toolbar{display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
+  .tarefas-toolbar .form-field{min-width:150px;}
+  .tarefas-toolbar .btn-primary{margin-left:auto;}
+  .tarefas-lista{border:1px solid var(--border); border-radius:10px; overflow:hidden;}
+  .tarefa-linha{
+    display:grid; grid-template-columns:120px minmax(0,1fr) 120px 100px 110px 80px 210px; gap:10px; align-items:center;
+    padding:9px 12px; border-bottom:1px solid var(--border); font-size:12.5px;
+  }
+  .tarefa-linha:last-child{border-bottom:none;}
+  .tarefa-linha.cabecalho{background:var(--panel-2); font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+  .tarefa-linha.prevista{color:var(--muted); font-style:italic;}
+  .tarefa-linha .tl-desc{overflow-wrap:break-word; min-width:0;}
+  .tarefa-linha .tl-acoes{display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;}
+  .tarefa-linha .tl-acoes .req-btn{padding:6px 9px; font-size:11.5px;}
+  .tarefa-linha .tl-rotulo{display:none;}
+  .badge.tf-pendente{background:rgba(245,158,11,.15); color:var(--warn);}
+  .badge.tf-realizada{background:rgba(34,197,94,.15); color:var(--accent-2);}
+  .badge.tf-prevista{background:var(--panel-2); color:var(--muted); border:1px dashed var(--border);}
+  .link-req{background:none; border:none; padding:0; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:12.5px;}
+  .link-req:hover{text-decoration:underline;}
+  .tarefas-vazio{padding:28px 12px; text-align:center; color:var(--muted); font-size:12.5px;}
+  .tarefas-totais{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px;}
+  .tarefas-totais .kpi{padding:10px 14px;}
+  .tarefas-totais .kpi .value{font-size:18px;}
+  .tarefa-modelo{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.45;}
+  @media (max-width:900px){
+    .tarefa-linha.cabecalho{display:none;}
+    .tarefa-linha{grid-template-columns:1fr auto; gap:4px 10px;}
+    .tarefa-linha > div{grid-column:1 / -1;}
+    .tarefa-linha > .tl-situacao{grid-column:2; grid-row:1;}
+    .tarefa-linha > .tl-previsao{grid-column:1; grid-row:1; font-weight:700;}
+    .tarefa-linha .tl-rotulo{display:inline; color:var(--muted);}
+    .tarefa-linha .tl-acoes{justify-content:flex-start; margin-top:4px;}
+    .tarefa-linha .tl-acoes .req-btn{min-height:40px;}
+    .tarefas-totais{grid-template-columns:repeat(2,1fr);}
+    .tarefas-toolbar .form-field{flex:1 1 140px;}
+    .tarefas-toolbar .btn-primary{width:100%; justify-content:center; margin-left:0; min-height:44px;}
+  }
+  @media (max-width:700px){
+    .header-acoes{width:100%;}
+    .header-acoes > button{flex:1 1 0; justify-content:center; min-height:44px;}
+  }
+
   @media (max-width:1000px){
     .kpi-grid{grid-template-columns:repeat(2,1fr);}
     .form-grid{grid-template-columns:1fr;}
@@ -562,7 +614,12 @@
           <h1>Requisição de Compras</h1>
           <p class="sub">Quem precisa de material solicita aqui — o comprador acompanha, cotação, aprova e atualiza o status de cada pedido</p>
         </div>
-        <button type="button" class="btn-primary" id="btnNovaRequisicao">+ Nova Requisição</button>
+        <div class="header-acoes">
+          <button type="button" class="btn-sec" id="btnTarefas" title="Requisições que você repete todo mês ou toda semana">
+            🗓 Tarefas<span class="notif-badge" id="tarefasBadge" style="display:none;">0</span>
+          </button>
+          <button type="button" class="btn-primary" id="btnNovaRequisicao">+ Nova Requisição</button>
+        </div>
       </div>
 
       <div class="kpi-grid" id="kpiGrid"></div>
@@ -818,6 +875,143 @@
     <div class="modal-footer">
       <button type="button" class="req-btn" id="modalCancelar">Cancelar</button>
       <button type="button" class="btn-primary" id="modalCriar">Criar requisição</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="tarefasBackdrop">
+  <div class="modal modal-largo">
+    <div class="modal-header">
+      <h3>Painel de Tarefas</h3>
+      <button type="button" class="modal-close" id="tarefasClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="sub" style="margin:0 0 14px; font-size:12.5px; color:var(--muted);">Requisições que você repete. No dia, toque em "Gerar requisição": o formulário vem preenchido e, ao criar, a tarefa vira Realizada e a próxima data já fica agendada.</p>
+      <div class="tarefas-toolbar">
+        <div class="form-field">
+          <label for="tfFiltroSituacao">Situação</label>
+          <select id="tfFiltroSituacao">
+            <option value="todas">Todas</option>
+            <option value="pendente">Pendente</option>
+            <option value="realizada">Realizada</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="tfFiltroPeriodo">Previsto para</label>
+          <select id="tfFiltroPeriodo">
+            <option value="anterior">Mês anterior</option>
+            <option value="atual" selected>Mês atual</option>
+            <option value="proximo">Próximo mês</option>
+            <option value="todos">Todos</option>
+          </select>
+        </div>
+        <div class="form-field" id="tfFiltroVerWrap" style="display:none;">
+          <label for="tfFiltroVer">Visualizar</label>
+          <select id="tfFiltroVer">
+            <option value="minhas">Somente as minhas</option>
+            <option value="todas">De todos (gestor)</option>
+          </select>
+        </div>
+        <button type="button" class="btn-primary" id="btnIncluirTarefa">+ Incluir tarefa</button>
+      </div>
+      <div class="tarefas-lista" id="tarefasLista"></div>
+      <div class="tarefas-totais" id="tarefasTotais"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="tarefaFormBackdrop">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3 id="tarefaFormTitulo">Nova tarefa</h3>
+      <button type="button" class="modal-close" id="tarefaFormClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-erro" id="tarefaErro"></p>
+      <div class="form-grid">
+        <div class="form-field full">
+          <label for="tDescricao">Descrição *</label>
+          <textarea id="tDescricao" placeholder="Ex.: Locação mensal de andaimes — Shopping Jardim Sul, valor mensal R$ 1.425"></textarea>
+        </div>
+        <div class="form-field">
+          <label for="tData">Enviar a requisição em *</label>
+          <input type="date" id="tData">
+        </div>
+        <div class="form-field">
+          <label for="tHora">Hora *</label>
+          <input type="time" id="tHora">
+        </div>
+        <div class="form-field">
+          <label for="tLembrete">Me lembrar</label>
+          <select id="tLembrete">
+            <option value="0">Sem lembrete</option>
+            <option value="10">10 minutos antes</option>
+            <option value="30">30 minutos antes</option>
+            <option value="60">1 hora antes</option>
+            <option value="1440">1 dia antes</option>
+          </select>
+          <p class="form-hint">O aviso aparece no sino 🔔 da plataforma.</p>
+        </div>
+        <div class="form-field">
+          <label for="tRecorrencia">Recorrência</label>
+          <select id="tRecorrencia">
+            <option value="nenhuma">Não repete</option>
+            <option value="diaria">Todo dia</option>
+            <option value="semanal">Toda semana</option>
+            <option value="mensal">1 vez no mês</option>
+            <option value="duas_mes">2 vezes no mês</option>
+          </select>
+          <p class="form-hint" id="tRecorrenciaDica"></p>
+        </div>
+        <div class="form-field" id="tDiasWrap" style="display:none;">
+          <label for="tDia1">1º dia do mês</label>
+          <input type="number" id="tDia1" min="1" max="31" inputmode="numeric">
+        </div>
+        <div class="form-field" id="tDiasWrap2" style="display:none;">
+          <label for="tDia2">2º dia do mês</label>
+          <input type="number" id="tDia2" min="1" max="31" inputmode="numeric">
+        </div>
+        <div class="form-field full" id="tModeloWrap" style="display:none;">
+          <label>Requisição modelo</label>
+          <div class="tarefa-modelo" id="tModeloInfo"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="req-btn" id="tarefaCancelar">Cancelar</button>
+      <button type="button" class="btn-primary" id="tarefaSalvar">Salvar tarefa</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="perguntaTarefaBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3>Gerar tarefa?</h3>
+      <button type="button" class="modal-close" id="perguntaTarefaClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="perguntaTarefaTexto" style="margin:0; font-size:13px; line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="req-btn" id="perguntaTarefaNao">Não</button>
+      <button type="button" class="btn-primary" id="perguntaTarefaSim">Sim, gerar tarefa</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="excluirTarefaBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3>Excluir tarefa</h3>
+      <button type="button" class="modal-close" id="excluirTarefaClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="excluirTarefaTexto" style="margin:0; font-size:13px; line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="req-btn" id="excluirTarefaCancelar">Cancelar</button>
+      <button type="button" class="btn-primary" id="excluirTarefaConfirmar" style="background:var(--danger);">Excluir</button>
     </div>
   </div>
 </div>
@@ -1120,10 +1314,12 @@ const NOTIFICACOES = [];
 let PROX_NOTIF_ID = 1;
 // chave: identifica o fato que gerou o aviso (ex.: um vencimento de prazo, uma menção). O mesmo fato
 // nunca gera duas notificações. FIREBASE: a chave vira o ID do documento em notificacoes/{chave}.
-function criarNotificacao(paraNome, texto, requisicaoId, chave){
-  if(!paraNome) return;
-  if(chave && NOTIFICACOES.some(n=> n.chave === chave)) return;
-  NOTIFICACOES.unshift({id: PROX_NOTIF_ID++, chave: chave || null, para: paraNome, texto, requisicaoId, data: new Date(), lida:false});
+// tarefaId (opcional): o aviso é de uma tarefa — ao clicar, abre o Painel de Tarefas.
+function criarNotificacao(paraNome, texto, requisicaoId, chave, tarefaId){
+  if(!paraNome) return false;
+  if(chave && NOTIFICACOES.some(n=> n.chave === chave)) return false;
+  NOTIFICACOES.unshift({id: PROX_NOTIF_ID++, chave: chave || null, para: paraNome, texto, requisicaoId, tarefaId: tarefaId || null, data: new Date(), lida:false});
+  return true;
 }
 
 function isFinalizada(status){ return status === "recebido" || status === "cancelado"; }
@@ -1639,6 +1835,7 @@ document.getElementById("perfilSalvar").addEventListener("click", ()=>{
   }
   atualizarBadgePerfil();
   atualizarBadgeNotificacoes(); // trocou de usuário → as notificações exibidas também mudam
+  atualizarBadgeTarefas();
   fecharPerfil();
   if(typeof requisicaoAtualId !== "undefined" && requisicaoAtualId) abrirDrawer(requisicaoAtualId);
 });
@@ -1673,7 +1870,7 @@ function renderNotificacoes(){
     return;
   }
   lista.innerHTML = minhas.map(n=>`
-    <div class="notif-item ${n.lida ? '' : 'nao-lida'}" data-id="${n.id}" data-req="${n.requisicaoId || ''}">
+    <div class="notif-item ${n.lida ? '' : 'nao-lida'}" data-id="${n.id}" data-req="${n.requisicaoId || ''}" data-tarefa="${n.tarefaId || ''}">
       <div class="ni-texto">${escapeHtml(n.texto)}</div>
       <div class="ni-data">${fmtDataHora(n.data)}</div>
     </div>
@@ -1717,7 +1914,8 @@ document.getElementById("notifLista").addEventListener("click", (e)=>{
   atualizarBadgeNotificacoes();
   renderNotificacoes();
   fecharNotificacoes();
-  if(item.dataset.req) abrirDrawer(item.dataset.req);
+  if(item.dataset.tarefa) abrirPainelTarefas();
+  else if(item.dataset.req) abrirDrawer(item.dataset.req);
 });
 atualizarBadgeNotificacoes();
 
@@ -2032,7 +2230,7 @@ btnEnviarComentario.addEventListener("click", ()=> comBotaoTravado(btnEnviarCome
 // FIREBASE: gravarRequisicao vira um runTransaction; as operações continuam iguais (FIREBASE-AJUSTES.md).
 function obterRequisicao(id){ return REQUISICOES.find(x=>x.id===id); }
 // Leitura do estado usada pela página de testes (testes/concorrencia.html).
-function estadoParaTestes(){ return {requisicoes: REQUISICOES, notificacoes: NOTIFICACOES}; }
+function estadoParaTestes(){ return {requisicoes: REQUISICOES, notificacoes: NOTIFICACOES, tarefas: TAREFAS}; }
 
 function gravarRequisicao(id, versaoVista, aplicar){
   const r = obterRequisicao(id);
@@ -3084,11 +3282,13 @@ function preencherItensRapidos(itens){
 let modoEdicaoId = null;
 let versaoVistaEdicao = null;
 let chaveNovaRequisicao = null; // gerada a cada abertura do formulário de nova requisição
+let tarefaEmGeracao = null; // {id, versao} quando o formulário foi aberto por "Gerar requisição" de uma tarefa
 const modalTituloEl = document.getElementById("modalTitulo");
 const modalCriarBtn = document.getElementById("modalCriar");
 
 function abrirModalNovaRequisicao(){
   modoEdicaoId = null;
+  tarefaEmGeracao = null;
   chaveNovaRequisicao = novaChaveEnvio();
   modalTituloEl.textContent = "Nova Requisição de Compra";
   modalCriarBtn.textContent = "Criar requisição";
@@ -3138,9 +3338,12 @@ function fecharModal(){ modalBackdrop.classList.remove("open"); }
 // requisição nova não há drawer nenhum pra reabrir.
 function cancelarModal(){
   const idEditando = modoEdicaoId;
+  const vinhaDeTarefa = !!tarefaEmGeracao;
   modoEdicaoId = null;
+  tarefaEmGeracao = null;
   fecharModal();
   if(idEditando) abrirDrawer(idEditando);
+  else if(vinhaDeTarefa) abrirPainelTarefas();
 }
 
 document.getElementById("btnNovaRequisicao").addEventListener("click", abrirModalNovaRequisicao);
@@ -3327,10 +3530,554 @@ modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>
     return;
   }
 
+  // Gerando a partir de uma tarefa: confere antes se ela ainda está pendente (outra pessoa pode ter gerado).
+  const tarefa = tarefaEmGeracao;
+  if(tarefa){
+    const erroTarefa = erroGerarDaTarefa(tarefa.id, tarefa.versao);
+    if(erroTarefa){ erroEl.textContent = erroTarefa; erroEl.classList.add("show"); return; }
+  }
+
   const resultado = opCriarRequisicao(chaveNovaRequisicao, dados);
+  if(!resultado.ok){ erroEl.textContent = resultado.erro; erroEl.classList.add("show"); return; }
+  tarefaEmGeracao = null;
   fecharModal();
-  concluirOperacao(resultado, resultado.ok ? resultado.r.id : null);
+  concluirOperacao(resultado, resultado.r.id);
+  if(tarefa){
+    // FIREBASE: criar a requisição e concluir a tarefa na mesma transação (FIREBASE-AJUSTES.md).
+    const fim = opConcluirTarefa(tarefa.id, tarefa.versao, resultado.r.id);
+    if(!fim.ok) mostrarAviso(fim.erro, "erro");
+    else mostrarAviso(fim.proxima
+      ? `Tarefa ${fim.t.id} realizada. A próxima ficou para ${fmtDataHora(fim.proxima.dataHora)}.`
+      : `Tarefa ${fim.t.id} realizada.`);
+    atualizarBadgeTarefas();
+  } else if(!resultado.repetido){
+    abrirPerguntaGerarTarefa(resultado.r.id);
+  }
 }));
+
+// ---------- TAREFAS (requisições que se repetem) ----------
+// Quem faz a mesma compra todo mês ou toda semana cadastra uma tarefa: descrição, data e hora em que a
+// requisição deve sair, lembrete e recorrência. No dia, "Gerar requisição" abre o formulário já preenchido;
+// ao criar, a tarefa vira Realizada e a próxima data da recorrência nasce Pendente (outra tarefa da mesma série).
+// Ficam na memória, como as requisições. FIREBASE: coleção tarefas/{id} (FIREBASE-AJUSTES.md).
+const TAREFAS = [];
+let PROX_TAREFA_ID = 1;
+function novoIdTarefa(){ return "TF-" + String(PROX_TAREFA_ID++).padStart(4,"0"); }
+const RECORRENCIA_LABEL = {nenhuma:"Não repete", diaria:"Todo dia", semanal:"Toda semana", mensal:"1 vez no mês", duas_mes:"2 vezes no mês"};
+const LEMBRETE_LABEL = {0:"Sem lembrete", 10:"10 min antes", 30:"30 min antes", 60:"1 hora antes", 1440:"1 dia antes"};
+const DIAS_SEMANA = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+const DIAS_SEMANA_CURTO = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+function obterTarefa(id){ return TAREFAS.find(t=> t.id === id); }
+// Mesma ideia das requisições: quem criou a tarefa ou o gestor geral.
+function podeAlterarTarefa(t){
+  return usuarioAtualGestor() || (!!usuarioAtualNome() && normalizarNome(t.dono) === normalizarNome(usuarioAtualNome()));
+}
+function tarefaAtrasada(t, agora = new Date()){ return t.status === "pendente" && t.dataHora < agora; }
+function resumoTarefa(t){ return t.descricao.length > 70 ? t.descricao.slice(0,70) + "…" : t.descricao; }
+
+// Dia do mês sem estourar o mês (dia 31 em abril vira 30; dia 30 em fevereiro vira 28/29).
+function dataNoMes(ano, mes, dia, base){
+  const ultimo = new Date(ano, mes + 1, 0).getDate();
+  return new Date(ano, mes, Math.min(dia, ultimo), base.getHours(), base.getMinutes());
+}
+// Próxima data da recorrência depois de "data", mantendo o horário. null = não repete.
+function proximaDataRecorrencia(t, data){
+  const d = new Date(data);
+  if(t.recorrencia === "diaria"){ d.setDate(d.getDate() + 1); return d; }
+  if(t.recorrencia === "semanal"){ d.setDate(d.getDate() + 7); return d; }
+  if(t.recorrencia === "mensal") return dataNoMes(d.getFullYear(), d.getMonth() + 1, t.diasMes[0], d);
+  if(t.recorrencia === "duas_mes"){
+    const [a, b] = t.diasMes;
+    const segunda = dataNoMes(d.getFullYear(), d.getMonth(), b, d);
+    if(d.getDate() < segunda.getDate()) return segunda;
+    return dataNoMes(d.getFullYear(), d.getMonth() + 1, a, d);
+  }
+  return null;
+}
+function descreverRecorrencia(t){
+  if(t.recorrencia === "semanal") return `Toda ${DIAS_SEMANA[t.dataHora.getDay()].toLowerCase()}`;
+  if(t.recorrencia === "mensal") return `Todo dia ${t.diasMes[0]}`;
+  if(t.recorrencia === "duas_mes") return `Dias ${t.diasMes[0]} e ${t.diasMes[1]}`;
+  return RECORRENCIA_LABEL[t.recorrencia];
+}
+
+// dados: {descricao, dataHora (Date), lembreteMin, recorrencia, diasMes (só p/ 2 vezes no mês), modelo}
+function erroDadosTarefa(d){
+  if(!d.descricao || !d.descricao.trim()) return "Escreva a descrição da tarefa.";
+  if(!(d.dataHora instanceof Date) || isNaN(d.dataHora)) return "Informe a data e a hora em que a requisição deve ser enviada.";
+  if(!(d.recorrencia in RECORRENCIA_LABEL)) return "Escolha a recorrência.";
+  if(!(String(d.lembreteMin) in LEMBRETE_LABEL)) return "Escolha quando quer ser lembrado.";
+  if(d.recorrencia === "duas_mes"){
+    const [a, b] = (d.diasMes || []).map(Number);
+    const valido = (n)=> Number.isInteger(n) && n >= 1 && n <= 31;
+    if(!valido(a) || !valido(b)) return "Informe os dois dias do mês (de 1 a 31).";
+    if(a === b) return "Os dois dias do mês precisam ser diferentes.";
+  }
+  return "";
+}
+function normalizarDadosTarefa(d){
+  const dataHora = new Date(d.dataHora);
+  const diasMes = d.recorrencia === "duas_mes" ? d.diasMes.map(Number).sort((x,y)=> x - y)
+    : d.recorrencia === "mensal" ? [dataHora.getDate()] : [];
+  return {descricao: d.descricao.trim(), dataHora, lembreteMin: Number(d.lembreteMin), recorrencia: d.recorrencia, diasMes, modelo: d.modelo || null};
+}
+// Mesma conferência de versão das requisições: quem gravou com uma versão velha é recusado.
+function gravarTarefa(id, versaoVista, aplicar){
+  const t = obterTarefa(id);
+  if(!t) return {ok:false, erro:"Esta tarefa não existe mais (foi excluída)."};
+  if(!podeAlterarTarefa(t)) return {ok:false, erro:`Só ${t.dono} (quem criou) ou o gestor geral podem alterar a tarefa ${t.id}.`};
+  if(versaoVista != null && t.versao !== versaoVista){
+    return {ok:false, erro:`A tarefa ${t.id} foi alterada por outra ação enquanto você preenchia. Confira e tente de novo.`};
+  }
+  const erro = aplicar(t);
+  if(erro) return {ok:false, erro};
+  t.versao++;
+  return {ok:true, t};
+}
+function opCriarTarefa(chave, dados){
+  const existente = TAREFAS.find(t=> t.chaveCriacao === chave);
+  if(existente) return {ok:true, t:existente, repetido:true};
+  const dono = usuarioAtualNome();
+  if(!dono) return {ok:false, erro:"Defina seu usuário no 👤 antes de criar tarefas."};
+  const erro = erroDadosTarefa(dados);
+  if(erro) return {ok:false, erro};
+  const id = novoIdTarefa();
+  const t = Object.assign({id, serieId:id, chaveCriacao:chave, versao:1, dono, status:"pendente", requisicaoGeradaId:null, criadaEm:new Date()},
+    normalizarDadosTarefa(dados));
+  TAREFAS.push(t);
+  return {ok:true, t};
+}
+function opEditarTarefa(id, versao, dados){
+  const erro = erroDadosTarefa(dados);
+  if(erro) return {ok:false, erro};
+  return gravarTarefa(id, versao, t=>{
+    if(t.status !== "pendente") return `A tarefa ${t.id} já foi realizada e não pode mais ser editada.`;
+    Object.assign(t, normalizarDadosTarefa(Object.assign({modelo: t.modelo}, dados)));
+  });
+}
+function opExcluirTarefa(id, versao){
+  const r = gravarTarefa(id, versao, ()=>{});
+  if(!r.ok) return r;
+  TAREFAS.splice(TAREFAS.indexOf(r.t), 1);
+  return {ok:true, t:r.t};
+}
+// Conferência feita antes de criar a requisição pelo formulário (avisa cedo, sem criar nada).
+function erroGerarDaTarefa(id, versao){
+  const t = obterTarefa(id);
+  if(!t) return "Esta tarefa não existe mais (foi excluída).";
+  if(!podeAlterarTarefa(t)) return `Só ${t.dono} (quem criou) ou o gestor geral podem gerar a requisição da tarefa ${t.id}.`;
+  if(t.status !== "pendente") return `A tarefa ${t.id} já foi realizada (requisição ${t.requisicaoGeradaId}).`;
+  if(t.versao !== versao) return `A tarefa ${t.id} foi alterada enquanto você preenchia. Feche e gere de novo pelo painel.`;
+  return "";
+}
+// Marca a tarefa como Realizada (ligada à requisição criada) e agenda a próxima data da recorrência.
+// Se a tarefa estava atrasada, a próxima pula as datas que já passaram. A chave da próxima impede
+// que duas conclusões ao mesmo tempo criem duas tarefas seguintes.
+function opConcluirTarefa(id, versao, requisicaoId){
+  const atual = obterTarefa(id);
+  if(atual && atual.status === "realizada" && atual.requisicaoGeradaId === requisicaoId){
+    return {ok:true, t:atual, proxima: TAREFAS.find(x=> x.chaveCriacao === "proxima:" + id) || null, repetido:true};
+  }
+  const r = gravarTarefa(id, versao, t=>{
+    if(t.status !== "pendente") return `A tarefa ${t.id} já foi realizada (requisição ${t.requisicaoGeradaId}).`;
+    t.status = "realizada";
+    t.realizadaEm = new Date();
+    t.requisicaoGeradaId = requisicaoId;
+  });
+  if(!r.ok) return r;
+  const t = r.t;
+  let proxima = null;
+  let data = proximaDataRecorrencia(t, t.dataHora);
+  const hoje = inicioDoDia(new Date());
+  for(let i = 0; data && data < hoje && i < 1000; i++) data = proximaDataRecorrencia(t, data);
+  if(data){
+    proxima = {
+      id: novoIdTarefa(), serieId: t.serieId, chaveCriacao: "proxima:" + t.id, versao: 1, dono: t.dono,
+      status: "pendente", requisicaoGeradaId: null, criadaEm: new Date(),
+      descricao: t.descricao, dataHora: data, lembreteMin: t.lembreteMin, recorrencia: t.recorrencia,
+      diasMes: [...t.diasMes], modelo: t.modelo,
+    };
+    TAREFAS.push(proxima);
+  }
+  return {ok:true, t, proxima};
+}
+
+// Lembrete: chega no sino de quem criou a tarefa, X minutos antes da data/hora. Cada data só avisa uma vez.
+// Aqui no protótipo só roda com a página aberta. FIREBASE: função agendada no servidor (FIREBASE-AJUSTES.md).
+function verificarLembretesTarefas(agora = new Date()){
+  let avisou = false;
+  TAREFAS.forEach(t=>{
+    if(t.status !== "pendente" || !t.lembreteMin) return;
+    if(agora.getTime() < t.dataHora.getTime() - t.lembreteMin * 60000) return;
+    const chave = `lembrete:${t.id}:${t.dataHora.getTime()}`;
+    const texto = `Lembrete: gerar a requisição da tarefa ${t.id} — "${resumoTarefa(t)}", prevista para ${fmtDataHora(t.dataHora)}.`;
+    if(!criarNotificacao(t.dono, texto, null, chave, t.id)) return;
+    avisou = true;
+    if(normalizarNome(t.dono) === normalizarNome(usuarioAtualNome())) mostrarAviso(texto);
+  });
+  if(avisou) atualizarBadgeNotificacoes();
+  return avisou;
+}
+
+// Contador no botão "Tarefas": minhas pendentes que vencem hoje ou já passaram.
+function atualizarBadgeTarefas(){
+  const badge = document.getElementById("tarefasBadge");
+  const nome = normalizarNome(usuarioAtualNome());
+  const fimHoje = new Date(inicioDoDia(new Date()).getTime() + 86400000);
+  const n = nome ? TAREFAS.filter(t=> t.status === "pendente" && normalizarNome(t.dono) === nome && t.dataHora < fimHoje).length : 0;
+  badge.textContent = n > 9 ? "9+" : String(n);
+  badge.style.display = n ? "flex" : "none";
+}
+
+// Tarefas de exemplo (nomes fictícios), cada uma com a requisição de exemplo do mesmo solicitante como modelo.
+(function semearTarefas(){
+  const agora = new Date();
+  const modeloDe = (nome)=>{
+    const r = REQUISICOES.find(x=> x.solicitante === nome);
+    if(!r) return {modelo:null, req:null};
+    return {req:r, modelo:{
+      solicitante:r.solicitante, origem:r.origem, projetoNumero:r.projetoNumero, projetoNome:r.projetoNome,
+      prioridade:r.prioridade, observacao:r.observacao, faturamentoDireto:r.faturamentoDireto,
+      itens:(r.itens||[]).map(({recebido, ...i})=> ({...i})),
+    }};
+  };
+  const series = [
+    {dono:"Fernanda Lima", descricao:"Locação mensal de andaimes — Shopping Rio Claro. Duplicar o pedido do mês anterior.", recorrencia:"mensal", dia:2, lembreteMin:60},
+    {dono:"Camila Duarte", descricao:"Reposição semanal de EPI da equipe de manutenção (luvas, óculos e protetor auricular).", recorrencia:"semanal", lembreteMin:30},
+    {dono:"Marcos Aurélio", descricao:"Material de escritório da obra — pedido quinzenal.", recorrencia:"duas_mes", dias:[5,20], lembreteMin:1440},
+  ];
+  series.forEach(s=>{
+    const {modelo, req} = modeloDe(s.dono);
+    // Uma ocorrência já realizada no passado e a seguinte pendente.
+    let anterior;
+    if(s.recorrencia === "mensal") anterior = new Date(agora.getFullYear(), agora.getMonth() - 1, s.dia, 9, 0);
+    else if(s.recorrencia === "semanal"){ anterior = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - 5, 8, 0); }
+    else anterior = new Date(agora.getFullYear(), agora.getMonth() - 1, s.dias[1], 10, 0);
+    const id = novoIdTarefa();
+    const feita = {id, serieId:id, chaveCriacao:"seed:" + id, versao:1, dono:s.dono, status:"realizada",
+      requisicaoGeradaId: req ? req.id : null, criadaEm:anterior, realizadaEm:anterior,
+      descricao:s.descricao, dataHora:anterior, lembreteMin:s.lembreteMin, recorrencia:s.recorrencia,
+      diasMes: s.recorrencia === "mensal" ? [s.dia] : (s.dias || []), modelo};
+    TAREFAS.push(feita);
+    const prox = proximaDataRecorrencia(feita, anterior);
+    TAREFAS.push(Object.assign({}, feita, {id:novoIdTarefa(), chaveCriacao:"proxima:" + id, status:"pendente",
+      requisicaoGeradaId:null, realizadaEm:null, dataHora:prox, diasMes:[...feita.diasMes]}));
+  });
+})();
+
+// ---------- PAINEL DE TAREFAS ----------
+const tarefasBackdrop = document.getElementById("tarefasBackdrop");
+const tfFiltroSituacao = document.getElementById("tfFiltroSituacao");
+const tfFiltroPeriodo = document.getElementById("tfFiltroPeriodo");
+const tfFiltroVer = document.getElementById("tfFiltroVer");
+
+function intervaloPeriodo(periodo){
+  const h = new Date();
+  if(periodo === "todos") return null;
+  const desloc = periodo === "anterior" ? -1 : periodo === "proximo" ? 1 : 0;
+  return {ini: new Date(h.getFullYear(), h.getMonth() + desloc, 1), fim: new Date(h.getFullYear(), h.getMonth() + desloc + 1, 1)};
+}
+// Datas futuras da recorrência (ainda não criadas) aparecem como "Prevista", só para planejar.
+function previstasDaSerie(ultima, ate){
+  const lista = [];
+  if(!ate) ate = new Date(new Date().getFullYear(), new Date().getMonth() + 2, 1);
+  let d = proximaDataRecorrencia(ultima, ultima.dataHora);
+  for(let i = 0; d && d < ate && i < 400; i++){
+    lista.push({id:"", prevista:true, status:"prevista", dono:ultima.dono, descricao:ultima.descricao, dataHora:d,
+      lembreteMin:ultima.lembreteMin, recorrencia:ultima.recorrencia, diasMes:ultima.diasMes});
+    d = proximaDataRecorrencia(ultima, d);
+  }
+  return lista;
+}
+function tarefasVisiveis(){
+  const nome = normalizarNome(usuarioAtualNome());
+  const todas = usuarioAtualGestor() && tfFiltroVer.value === "todas";
+  return TAREFAS.filter(t=> todas || normalizarNome(t.dono) === nome);
+}
+function linhasDoPainel(){
+  const intervalo = intervaloPeriodo(tfFiltroPeriodo.value);
+  const reais = tarefasVisiveis();
+  // Última pendente de cada série → projeta as próximas datas.
+  const ultimas = {};
+  reais.forEach(t=>{ if(!ultimas[t.serieId] || t.dataHora > ultimas[t.serieId].dataHora) ultimas[t.serieId] = t; });
+  const previstas = Object.values(ultimas).filter(t=> t.status === "pendente").flatMap(t=> previstasDaSerie(t, intervalo && intervalo.fim));
+  const situacao = tfFiltroSituacao.value;
+  return [...reais, ...previstas]
+    .filter(t=> !intervalo || (t.dataHora >= intervalo.ini && t.dataHora < intervalo.fim))
+    .filter(t=> situacao === "todas" || t.status === situacao || (situacao === "pendente" && t.prevista))
+    .sort((a,b)=> a.dataHora - b.dataHora);
+}
+function fmtPrevisao(d){
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getFullYear()).slice(2)} ${DIAS_SEMANA_CURTO[d.getDay()]} · ${d.toLocaleTimeString("pt-BR",{hour:"2-digit", minute:"2-digit"})}`;
+}
+function renderPainelTarefas(){
+  const lista = document.getElementById("tarefasLista");
+  const totaisEl = document.getElementById("tarefasTotais");
+  document.getElementById("tfFiltroVerWrap").style.display = usuarioAtualGestor() ? "" : "none";
+  if(!usuarioAtualNome()){
+    lista.innerHTML = `<div class="tarefas-vazio">Defina seu usuário no botão "👤" para ver e criar suas tarefas.</div>`;
+    totaisEl.innerHTML = "";
+    return;
+  }
+  const linhas = linhasDoPainel();
+  const agora = new Date();
+  const cab = `<div class="tarefa-linha cabecalho"><div>Previsão</div><div>Descrição</div><div>Recorrência</div><div>Lembrete</div><div>Situação</div><div>Requisição</div><div></div></div>`;
+  if(!linhas.length){
+    lista.innerHTML = cab + `<div class="tarefas-vazio">Nenhuma tarefa neste período. Use "+ Incluir tarefa" para agendar uma requisição que se repete.</div>`;
+  } else {
+    lista.innerHTML = cab + linhas.map(t=>{
+      const atrasada = tarefaAtrasada(t, agora);
+      const situacao = t.prevista ? `<span class="badge tf-prevista">Prevista</span>`
+        : t.status === "realizada" ? `<span class="badge tf-realizada">Realizada</span>`
+        : `<span class="badge tf-pendente">Pendente</span>${atrasada ? ` <span class="badge atraso">Atrasada</span>` : ""}`;
+      const req = t.requisicaoGeradaId ? `<button type="button" class="link-req" data-req="${escapeHtml(t.requisicaoGeradaId)}">${escapeHtml(t.requisicaoGeradaId)}</button>` : "—";
+      let acoes = "";
+      if(!t.prevista && t.status === "pendente" && podeAlterarTarefa(t)){
+        acoes = `<button type="button" class="req-btn" data-acao="gerar" data-id="${t.id}">▶ Gerar requisição</button>`
+          + `<button type="button" class="req-btn" data-acao="editar" data-id="${t.id}" title="Editar">✎</button>`
+          + `<button type="button" class="req-btn cancelar" data-acao="excluir" data-id="${t.id}" title="Excluir">🗑</button>`;
+      }
+      const dono = tfFiltroVer.value === "todas" && usuarioAtualGestor() ? `<div class="table-subtext">${escapeHtml(t.dono)}</div>` : "";
+      return `<div class="tarefa-linha${t.prevista ? " prevista" : ""}" data-tarefa="${t.id}">
+        <div class="tl-previsao">${fmtPrevisao(t.dataHora)}</div>
+        <div class="tl-desc">${escapeHtml(t.descricao)}${dono}</div>
+        <div><span class="tl-rotulo">Repete: </span>${escapeHtml(descreverRecorrencia(t))}</div>
+        <div><span class="tl-rotulo">Lembrete: </span>${LEMBRETE_LABEL[t.lembreteMin]}</div>
+        <div class="tl-situacao">${situacao}</div>
+        <div><span class="tl-rotulo">Requisição: </span>${req}</div>
+        <div class="tl-acoes">${acoes}</div>
+      </div>`;
+    }).join("");
+  }
+  const reais = linhas.filter(t=> !t.prevista);
+  const totais = [
+    ["Total", reais.length, ""],
+    ["Pendentes", reais.filter(t=> t.status === "pendente").length, ""],
+    ["Realizadas", reais.filter(t=> t.status === "realizada").length, ""],
+    ["Atrasadas", reais.filter(t=> tarefaAtrasada(t, agora)).length, "warn"],
+  ];
+  totaisEl.innerHTML = totais.map(([rotulo, n, cls])=> `<div class="kpi"><div class="label">${rotulo}</div><div class="value ${cls}">${n}</div></div>`).join("");
+}
+function abrirPainelTarefas(){
+  verificarLembretesTarefas();
+  renderPainelTarefas();
+  tarefasBackdrop.classList.add("open");
+}
+function fecharPainelTarefas(){ tarefasBackdrop.classList.remove("open"); }
+document.getElementById("btnTarefas").addEventListener("click", abrirPainelTarefas);
+document.getElementById("tarefasClose").addEventListener("click", fecharPainelTarefas);
+tarefasBackdrop.addEventListener("click", (e)=>{ if(e.target === tarefasBackdrop) fecharPainelTarefas(); });
+[tfFiltroSituacao, tfFiltroPeriodo, tfFiltroVer].forEach(el=> el.addEventListener("change", renderPainelTarefas));
+document.getElementById("tarefasLista").addEventListener("click", (e)=>{
+  const link = e.target.closest(".link-req");
+  if(link){
+    if(!obterRequisicao(link.dataset.req)){ mostrarAviso(`A requisição ${link.dataset.req} não existe mais (foi excluída).`, "erro"); return; }
+    fecharPainelTarefas();
+    abrirDrawer(link.dataset.req);
+    return;
+  }
+  const btn = e.target.closest("[data-acao]");
+  if(!btn) return;
+  const t = obterTarefa(btn.dataset.id);
+  if(!t) return;
+  if(btn.dataset.acao === "gerar") gerarRequisicaoDaTarefa(t.id);
+  else if(btn.dataset.acao === "editar") abrirFormTarefa({editarId: t.id});
+  else if(btn.dataset.acao === "excluir") abrirExcluirTarefa(t.id);
+});
+document.getElementById("btnIncluirTarefa").addEventListener("click", ()=>{
+  if(!usuarioAtualNome()){ mostrarAviso("Defina seu usuário no 👤 antes de criar tarefas.", "erro"); return; }
+  abrirFormTarefa({});
+});
+
+// "Gerar requisição": abre o formulário de nova requisição preenchido com o modelo da tarefa (ou só com a
+// descrição, se a tarefa não tem modelo). Ao criar, o formulário conclui a tarefa (ver modalCriar).
+function gerarRequisicaoDaTarefa(id){
+  const t = obterTarefa(id);
+  const erro = t ? erroGerarDaTarefa(t.id, t.versao) : "Esta tarefa não existe mais (foi excluída).";
+  if(erro){ mostrarAviso(erro, "erro"); renderPainelTarefas(); return; }
+  fecharPainelTarefas();
+  abrirModalNovaRequisicao();
+  tarefaEmGeracao = {id: t.id, versao: t.versao};
+  modalTituloEl.textContent = `Nova Requisição — tarefa ${t.id}`;
+  const m = t.modelo;
+  if(m){
+    document.getElementById("fSolicitante").value = m.solicitante || usuarioAtualNome();
+    fOrigem.value = m.origem || "";
+    fProjeto.value = m.projetoNumero || "";
+    document.getElementById("fPrioridade").value = m.prioridade || "normal";
+    document.getElementById("fObs").value = m.observacao || t.descricao;
+    fFaturamento.value = m.faturamentoDireto ? "sim" : "nao";
+    faturamentoAviso.style.display = m.faturamentoDireto ? "block" : "none";
+    if(m.itens && m.itens.length) preencherItensRapidos(m.itens);
+  } else {
+    document.getElementById("fObs").value = t.descricao;
+  }
+}
+
+// ---------- FORMULÁRIO DA TAREFA (incluir / editar / a partir de uma requisição) ----------
+const tarefaFormBackdrop = document.getElementById("tarefaFormBackdrop");
+const tarefaErroEl = document.getElementById("tarefaErro");
+const tRecorrencia = document.getElementById("tRecorrencia");
+let tarefaForm = null; // {chave} ao criar; {editarId, versao} ao editar; reqOrigemId quando veio de "Gerar tarefa?"
+function dataParaInput(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function horaParaInput(d){ return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+function dataHoraDoForm(){
+  const v = document.getElementById("tData").value, h = document.getElementById("tHora").value;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v) || !/^\d{2}:\d{2}$/.test(h)) return null;
+  const [a, m, d] = v.split("-").map(Number), [hh, mm] = h.split(":").map(Number);
+  return new Date(a, m - 1, d, hh, mm);
+}
+function atualizarDicaRecorrencia(){
+  const rec = tRecorrencia.value;
+  const dois = rec === "duas_mes";
+  document.getElementById("tDiasWrap").style.display = dois ? "" : "none";
+  document.getElementById("tDiasWrap2").style.display = dois ? "" : "none";
+  const d = dataHoraDoForm();
+  const dica = document.getElementById("tRecorrenciaDica");
+  if(rec === "semanal") dica.textContent = d ? `Repete toda ${DIAS_SEMANA[d.getDay()].toLowerCase()}, no mesmo horário.` : "Repete no mesmo dia da semana da data escolhida.";
+  else if(rec === "mensal") dica.textContent = d ? `Repete todo dia ${d.getDate()} (em meses mais curtos, no último dia).` : "Repete no mesmo dia do mês da data escolhida.";
+  else if(rec === "duas_mes") dica.textContent = "Escolha os dois dias do mês. A primeira vez é na data acima.";
+  else if(rec === "diaria") dica.textContent = "Repete todos os dias, no mesmo horário.";
+  else dica.textContent = "Só uma vez.";
+}
+["tData","tHora"].forEach(id=> document.getElementById(id).addEventListener("change", atualizarDicaRecorrencia));
+tRecorrencia.addEventListener("change", atualizarDicaRecorrencia);
+
+function descreverModelo(m, reqId){
+  const itens = (m.itens || []).length;
+  return `Ao gerar, o formulário vem preenchido${reqId ? ` com os dados da requisição <b>${escapeHtml(reqId)}</b>` : ""}: `
+    + `${escapeHtml(m.projetoNumero || "sem projeto")}${m.projetoNome ? " — " + escapeHtml(m.projetoNome) : ""}, prioridade ${escapeHtml(PRIORIDADE_LABEL[m.prioridade] || "Normal")}, `
+    + `${itens ? itens + (itens === 1 ? " item" : " itens") : "sem itens"}. Os anexos não são copiados (cada mês leva o seu).`;
+}
+// opcoes: {editarId} | {reqOrigemId} | {}
+function abrirFormTarefa(opcoes){
+  tarefaErroEl.classList.remove("show");
+  const t = opcoes.editarId ? obterTarefa(opcoes.editarId) : null;
+  let base;
+  if(t){
+    tarefaForm = {editarId: t.id, versao: t.versao, modelo: t.modelo};
+    base = t;
+    document.getElementById("tarefaFormTitulo").textContent = `Editar tarefa ${t.id}`;
+  } else {
+    const r = opcoes.reqOrigemId ? obterRequisicao(opcoes.reqOrigemId) : null;
+    const modelo = r ? {
+      solicitante:r.solicitante, origem:r.origem, projetoNumero:r.projetoNumero, projetoNome:r.projetoNome,
+      prioridade:r.prioridade, observacao:r.observacao, faturamentoDireto:r.faturamentoDireto,
+      itens:(r.itens||[]).map(({recebido, ...i})=> ({...i})),
+    } : null;
+    tarefaForm = {chave: novaChaveEnvio(), modelo, reqOrigemId: r ? r.id : null};
+    const agora = new Date();
+    // Vindo de uma requisição: sugere o mesmo dia no mês que vem, 1 vez no mês. Do zero: amanhã às 9h.
+    const data = r ? dataNoMes(agora.getFullYear(), agora.getMonth() + 1, agora.getDate(), new Date(2000,0,1,9,0))
+      : new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1, 9, 0);
+    base = {
+      descricao: r ? `${r.projetoNumero}${r.projetoNome ? " — " + r.projetoNome : ""}: ${r.observacao}` : "",
+      dataHora: data, lembreteMin: 30, recorrencia: "mensal", diasMes: [],
+    };
+    document.getElementById("tarefaFormTitulo").textContent = r ? `Nova tarefa a partir da ${r.id}` : "Nova tarefa";
+  }
+  document.getElementById("tDescricao").value = base.descricao;
+  document.getElementById("tData").value = dataParaInput(base.dataHora);
+  document.getElementById("tHora").value = horaParaInput(base.dataHora);
+  document.getElementById("tLembrete").value = String(base.lembreteMin);
+  tRecorrencia.value = base.recorrencia;
+  document.getElementById("tDia1").value = base.recorrencia === "duas_mes" ? base.diasMes[0] : "";
+  document.getElementById("tDia2").value = base.recorrencia === "duas_mes" ? base.diasMes[1] : "";
+  const modeloWrap = document.getElementById("tModeloWrap");
+  modeloWrap.style.display = tarefaForm.modelo ? "" : "none";
+  if(tarefaForm.modelo) document.getElementById("tModeloInfo").innerHTML = descreverModelo(tarefaForm.modelo, tarefaForm.reqOrigemId);
+  atualizarDicaRecorrencia();
+  fecharPainelTarefas();
+  tarefaFormBackdrop.classList.add("open");
+}
+function fecharFormTarefa(voltarAoPainel){
+  const reqOrigemId = tarefaForm && tarefaForm.reqOrigemId;
+  tarefaFormBackdrop.classList.remove("open");
+  tarefaForm = null;
+  if(voltarAoPainel) abrirPainelTarefas();
+  else if(reqOrigemId) abrirDrawer(reqOrigemId);
+}
+document.getElementById("tarefaFormClose").addEventListener("click", ()=> fecharFormTarefa(!(tarefaForm && tarefaForm.reqOrigemId)));
+document.getElementById("tarefaCancelar").addEventListener("click", ()=> fecharFormTarefa(!(tarefaForm && tarefaForm.reqOrigemId)));
+tarefaFormBackdrop.addEventListener("click", (e)=>{ if(e.target === tarefaFormBackdrop) fecharFormTarefa(!(tarefaForm && tarefaForm.reqOrigemId)); });
+const btnTarefaSalvar = document.getElementById("tarefaSalvar");
+btnTarefaSalvar.addEventListener("click", ()=> comBotaoTravado(btnTarefaSalvar, ()=>{
+  if(!tarefaForm) return;
+  const dados = {
+    descricao: document.getElementById("tDescricao").value,
+    dataHora: dataHoraDoForm() || new Date(NaN),
+    lembreteMin: document.getElementById("tLembrete").value,
+    recorrencia: tRecorrencia.value,
+    diasMes: [document.getElementById("tDia1").value, document.getElementById("tDia2").value].map(v=> v === "" ? NaN : Number(v)),
+    modelo: tarefaForm.modelo,
+  };
+  const resultado = tarefaForm.editarId ? opEditarTarefa(tarefaForm.editarId, tarefaForm.versao, dados) : opCriarTarefa(tarefaForm.chave, dados);
+  if(!resultado.ok){ tarefaErroEl.textContent = resultado.erro; tarefaErroEl.classList.add("show"); return; }
+  tarefaFormBackdrop.classList.remove("open");
+  tarefaForm = null;
+  // Mostra o mês em que a tarefa caiu, para ela aparecer na lista.
+  const h = new Date(), d = resultado.t.dataHora;
+  const difMes = (d.getFullYear() - h.getFullYear()) * 12 + d.getMonth() - h.getMonth();
+  tfFiltroPeriodo.value = difMes === 0 ? "atual" : difMes === 1 ? "proximo" : difMes === -1 ? "anterior" : "todos";
+  tfFiltroSituacao.value = "todas";
+  verificarLembretesTarefas();
+  atualizarBadgeTarefas();
+  abrirPainelTarefas();
+  mostrarAviso(`Tarefa ${resultado.t.id} salva para ${fmtDataHora(resultado.t.dataHora)}.`);
+}));
+
+// ---------- EXCLUIR TAREFA ----------
+const excluirTarefaBackdrop = document.getElementById("excluirTarefaBackdrop");
+let excluirTarefaAlvo = null;
+function abrirExcluirTarefa(id){
+  const t = obterTarefa(id);
+  if(!t) return;
+  excluirTarefaAlvo = {id: t.id, versao: t.versao};
+  document.getElementById("excluirTarefaTexto").textContent =
+    `Excluir a tarefa ${t.id} ("${resumoTarefa(t)}")? ${t.recorrencia !== "nenhuma" ? "As próximas datas da recorrência também deixam de existir. " : ""}As requisições já geradas continuam.`;
+  fecharPainelTarefas();
+  excluirTarefaBackdrop.classList.add("open");
+}
+function fecharExcluirTarefa(){ excluirTarefaBackdrop.classList.remove("open"); excluirTarefaAlvo = null; abrirPainelTarefas(); }
+document.getElementById("excluirTarefaClose").addEventListener("click", fecharExcluirTarefa);
+document.getElementById("excluirTarefaCancelar").addEventListener("click", fecharExcluirTarefa);
+excluirTarefaBackdrop.addEventListener("click", (e)=>{ if(e.target === excluirTarefaBackdrop) fecharExcluirTarefa(); });
+const btnExcluirTarefaConfirmar = document.getElementById("excluirTarefaConfirmar");
+btnExcluirTarefaConfirmar.addEventListener("click", ()=> comBotaoTravado(btnExcluirTarefaConfirmar, ()=>{
+  const alvo = excluirTarefaAlvo;
+  if(!alvo) return;
+  const resultado = opExcluirTarefa(alvo.id, alvo.versao);
+  if(!resultado.ok) mostrarAviso(resultado.erro, "erro");
+  atualizarBadgeTarefas();
+  fecharExcluirTarefa();
+}));
+
+// ---------- "GERAR TAREFA?" depois de criar uma requisição ----------
+const perguntaTarefaBackdrop = document.getElementById("perguntaTarefaBackdrop");
+let perguntaTarefaReqId = null;
+function abrirPerguntaGerarTarefa(reqId){
+  perguntaTarefaReqId = reqId;
+  document.getElementById("perguntaTarefaTexto").textContent =
+    `Requisição ${reqId} criada. Você faz essa compra todo mês ou toda semana? Se gerar uma tarefa, ela vai para o Painel de Tarefas e você ajusta a data, o lembrete e a recorrência.`;
+  perguntaTarefaBackdrop.classList.add("open");
+}
+function fecharPerguntaTarefa(){ perguntaTarefaBackdrop.classList.remove("open"); perguntaTarefaReqId = null; }
+document.getElementById("perguntaTarefaClose").addEventListener("click", fecharPerguntaTarefa);
+document.getElementById("perguntaTarefaNao").addEventListener("click", fecharPerguntaTarefa);
+perguntaTarefaBackdrop.addEventListener("click", (e)=>{ if(e.target === perguntaTarefaBackdrop) fecharPerguntaTarefa(); });
+document.getElementById("perguntaTarefaSim").addEventListener("click", ()=>{
+  const reqId = perguntaTarefaReqId;
+  fecharPerguntaTarefa();
+  if(!reqId) return;
+  if(!usuarioAtualNome()){ mostrarAviso("Defina seu usuário no 👤 antes de criar tarefas.", "erro"); return; }
+  fecharDrawer();
+  abrirFormTarefa({reqOrigemId: reqId});
+});
+
+verificarLembretesTarefas();
+atualizarBadgeTarefas();
+setInterval(()=>{ verificarLembretesTarefas(); atualizarBadgeTarefas(); }, 30000);
 
 // ---------- INICIALIZAÇÃO ----------
 renderKPIs();

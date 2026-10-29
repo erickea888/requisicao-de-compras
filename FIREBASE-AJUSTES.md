@@ -61,3 +61,12 @@ A ordem de preferência é a mesma da revisão: (a) ID único, (b) operação at
 - [ ] **11. Política de conteúdo (CSP).** Hoje a página bloqueia qualquer conexão de rede (`connect-src 'none'`). Liberar só os endereços do Firebase.
 - [ ] **12. Itens do checklist de implantação** do [SEGURANCA.md](SEGURANCA.md): anexos no Cloud Storage, App Check, cabeçalhos de segurança, backups.
 - [ ] **13. Página de testes.** Ela usa `estadoParaTestes()` para ler os dados. Na versão real, remover essa função ou trocá-la pelos testes no emulador (item 8).
+
+## Painel de Tarefas
+
+Hoje as tarefas ficam na memória da página, como as requisições, e somem ao recarregar. Decisão do Erick: implantar a gravação junto com o Firebase.
+
+- [ ] **14. Coleção `tarefas/{id}`.** Mesmos campos de hoje (`dono`, `descricao`, `dataHora`, `lembreteMin`, `recorrencia`, `diasMes`, `modelo`, `status`, `requisicaoGeradaId`, `serieId`, `versao`). `gravarTarefa` vira `runTransaction` (item 1) e a chave de criação vira o ID do documento (item 2).
+- [ ] **15. Gerar requisição e concluir a tarefa na mesma transação.** Hoje o formulário confere a tarefa (`erroGerarDaTarefa`), cria a requisição e depois chama `opConcluirTarefa`. No Firestore, as duas gravações e a criação da próxima tarefa (ID `proxima:{id}`) precisam sair juntas, para que duas pessoas gerando ao mesmo tempo não criem duas requisições.
+- [ ] **16. Lembretes no servidor.** Hoje `verificarLembretesTarefas` só roda com a página aberta (a cada 30 segundos). Para avisar quem está com o app fechado, é preciso uma função agendada (Cloud Functions, plano Blaze) que crie a notificação `lembrete:{id}:{data}`, e, se quiserem aviso no celular, Firebase Cloud Messaging.
+- [ ] **17. Security Rules das tarefas.** Só o dono ou o gestor lê e altera; tarefa Realizada não pode ser editada; recorrência e lembrete só com os valores permitidos.
