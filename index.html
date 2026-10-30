@@ -429,6 +429,7 @@
   .tarefas-totais .kpi{padding:10px 14px;}
   .tarefas-totais .kpi .value{font-size:18px;}
   .tarefa-modelo{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.45;}
+  .tarefa-secao{margin:6px 0 12px; padding-top:14px; border-top:1px solid var(--border); font-size:13px; font-weight:700;}
   .tarefa-repetir{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px;}
   .form-field .tarefa-repetir input{width:80px; flex:none;}
   .form-field .tarefa-repetir select{width:auto; flex:1 1 120px;}
@@ -885,6 +886,60 @@
           <button type="button" class="item-adicionar" id="btnAdicionarItem" style="display:none;">+ Adicionar outro item</button>
         </div>
       </div>
+      <div id="tarefaCampos" style="display:none;">
+        <p class="tarefa-secao">Programação da tarefa</p>
+        <div class="form-grid">
+          <div class="form-field full">
+            <label for="tDescricao">Descrição da tarefa *</label>
+            <textarea id="tDescricao" placeholder="Ex.: Locação mensal de andaimes — Shopping Jardim Sul, valor mensal R$ 1.425"></textarea>
+          </div>
+          <div class="form-field">
+            <label for="tData">Data inicial *</label>
+            <input type="date" id="tData">
+            <p class="form-hint">Dia da primeira requisição. As próximas seguem a partir dele.</p>
+          </div>
+          <div class="form-field">
+            <label for="tHora">Hora *</label>
+            <input type="time" id="tHora">
+          </div>
+          <div class="form-field full">
+            <label for="tVezes">Repetir *</label>
+            <div class="tarefa-repetir">
+              <input type="number" id="tVezes" min="1" inputmode="numeric" aria-label="Quantas vezes">
+              <span>vez(es) por</span>
+              <select id="tUnidade" aria-label="Período">
+                <option value="semana">Semana</option>
+                <option value="mes" selected>Mês</option>
+                <option value="ano">Ano</option>
+              </select>
+            </div>
+            <p class="form-hint">Ex.: 1 por mês = todo mês; 2 por mês = duas vezes no mês; 2 por ano = a cada 6 meses.</p>
+          </div>
+          <div class="form-field full">
+            <label>Termina em *</label>
+            <div class="tarefa-termino">
+              <label class="tarefa-opcao"><input type="radio" name="tTermino" id="tTerminoData" value="data" checked> Na data</label>
+              <input type="date" id="tDataFinal" aria-label="Data final">
+              <label class="tarefa-opcao"><input type="radio" name="tTermino" id="tTerminoAuto" value="automatica"> Renovação automática (sem data final)</label>
+            </div>
+          </div>
+          <div class="form-field full">
+            <label for="tLembrete">Me lembrar</label>
+            <select id="tLembrete">
+              <option value="0">Sem lembrete</option>
+              <option value="10">10 minutos antes</option>
+              <option value="30">30 minutos antes</option>
+              <option value="60">1 hora antes</option>
+              <option value="1440">1 dia antes</option>
+            </select>
+            <p class="form-hint">O aviso aparece no sino 🔔 da plataforma.</p>
+          </div>
+          <div class="form-field full">
+            <label>Próximas datas</label>
+            <div class="tarefa-modelo" id="tPrevia"></div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button type="button" class="req-btn" id="modalCancelar">Cancelar</button>
@@ -900,7 +955,7 @@
       <button type="button" class="modal-close" id="tarefasClose">✕</button>
     </div>
     <div class="modal-body">
-      <p class="sub" style="margin:0 0 14px; font-size:12.5px; color:var(--muted);">Requisições que você repete. No dia, toque em "Gerar requisição": o formulário vem preenchido e, ao criar, aquela data vira Realizada. Em "Histórico" você vê as requisições passadas e as próximas datas da tarefa.</p>
+      <p class="sub" style="margin:0 0 14px; font-size:12.5px; color:var(--muted);">Requisições que você repete. A tarefa guarda a requisição completa: no dia, um toque em "Gerar requisição" cria a requisição e aquela data vira Realizada. Em "Histórico" você vê as requisições passadas e as próximas datas da tarefa.</p>
       <div class="tarefas-toolbar">
         <div class="form-field">
           <label for="tfFiltroSituacao">Situação</label>
@@ -930,77 +985,6 @@
       </div>
       <div class="tarefas-lista" id="tarefasLista"></div>
       <div class="tarefas-totais" id="tarefasTotais"></div>
-    </div>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="tarefaFormBackdrop">
-  <div class="modal" style="max-width:580px;">
-    <div class="modal-header">
-      <h3 id="tarefaFormTitulo">Tarefa recorrente</h3>
-      <button type="button" class="modal-close" id="tarefaFormClose">✕</button>
-    </div>
-    <div class="modal-body">
-      <p class="form-erro" id="tarefaErro"></p>
-      <div class="form-grid">
-        <div class="form-field full">
-          <label for="tDescricao">Descrição *</label>
-          <textarea id="tDescricao" placeholder="Ex.: Locação mensal de andaimes — Shopping Jardim Sul, valor mensal R$ 1.425"></textarea>
-        </div>
-        <div class="form-field">
-          <label for="tData">Data inicial *</label>
-          <input type="date" id="tData">
-          <p class="form-hint">Dia da primeira requisição. As próximas seguem a partir dele.</p>
-        </div>
-        <div class="form-field">
-          <label for="tHora">Hora *</label>
-          <input type="time" id="tHora">
-        </div>
-        <div class="form-field full">
-          <label for="tVezes">Repetir *</label>
-          <div class="tarefa-repetir">
-            <input type="number" id="tVezes" min="1" inputmode="numeric" aria-label="Quantas vezes">
-            <span>vez(es) por</span>
-            <select id="tUnidade" aria-label="Período">
-              <option value="semana">Semana</option>
-              <option value="mes" selected>Mês</option>
-              <option value="ano">Ano</option>
-            </select>
-          </div>
-          <p class="form-hint">Ex.: 1 por mês = todo mês; 2 por mês = duas vezes no mês; 2 por ano = a cada 6 meses.</p>
-        </div>
-        <div class="form-field full">
-          <label>Termina em *</label>
-          <div class="tarefa-termino">
-            <label class="tarefa-opcao"><input type="radio" name="tTermino" id="tTerminoData" value="data" checked> Na data</label>
-            <input type="date" id="tDataFinal" aria-label="Data final">
-            <label class="tarefa-opcao"><input type="radio" name="tTermino" id="tTerminoAuto" value="automatica"> Renovação automática (sem data final)</label>
-          </div>
-        </div>
-        <div class="form-field full">
-          <label for="tLembrete">Me lembrar</label>
-          <select id="tLembrete">
-            <option value="0">Sem lembrete</option>
-            <option value="10">10 minutos antes</option>
-            <option value="30">30 minutos antes</option>
-            <option value="60">1 hora antes</option>
-            <option value="1440">1 dia antes</option>
-          </select>
-          <p class="form-hint">O aviso aparece no sino 🔔 da plataforma.</p>
-        </div>
-        <div class="form-field full">
-          <label>Próximas datas</label>
-          <div class="tarefa-modelo" id="tPrevia"></div>
-        </div>
-        <div class="form-field full" id="tModeloWrap" style="display:none;">
-          <label>Requisição modelo</label>
-          <div class="tarefa-modelo" id="tModeloInfo"></div>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="req-btn" id="tarefaCancelar">Cancelar</button>
-      <button type="button" class="btn-primary" id="tarefaSalvar">Salvar tarefa</button>
     </div>
   </div>
 </div>
@@ -3318,13 +3302,33 @@ function preencherItensRapidos(itens){
 let modoEdicaoId = null;
 let versaoVistaEdicao = null;
 let chaveNovaRequisicao = null; // gerada a cada abertura do formulário de nova requisição
-let tarefaEmGeracao = null; // {id, versao, data} quando o formulário foi aberto por "Gerar requisição" de uma tarefa
+// Com valor, o formulário está em modo tarefa: mesmos campos da requisição, mais a programação da tarefa.
+let tarefaForm = null; // {chave} ao criar; {editarId, versao} ao editar; reqOrigemId quando veio de "Gerar tarefa?"
+function definirModoTarefa(form){
+  tarefaForm = form;
+  document.getElementById("tarefaCampos").style.display = form ? "" : "none";
+}
+// Preenche os campos da requisição (usado ao editar uma requisição e na tela da tarefa).
+function preencherFormRequisicao(d){
+  document.getElementById("fSolicitante").value = d.solicitante || "";
+  fOrigem.value = d.origem || "";
+  fProjeto.value = d.projetoNumero || "";
+  document.getElementById("fPrioridade").value = d.prioridade || "normal";
+  document.getElementById("fObs").value = d.observacao || "";
+  fAnexoEl.value = "";
+  fFotoEl.value = "";
+  anexosSelecionados = [...(d.anexos || [])];
+  renderAnexoLista();
+  fFaturamento.value = d.faturamentoDireto ? "sim" : "nao";
+  faturamentoAviso.style.display = d.faturamentoDireto ? "block" : "none";
+  preencherItensRapidos(d.itens || []);
+}
 const modalTituloEl = document.getElementById("modalTitulo");
 const modalCriarBtn = document.getElementById("modalCriar");
 
 function abrirModalNovaRequisicao(){
   modoEdicaoId = null;
-  tarefaEmGeracao = null;
+  definirModoTarefa(null);
   chaveNovaRequisicao = novaChaveEnvio();
   modalTituloEl.textContent = "Nova Requisição de Compra";
   modalCriarBtn.textContent = "Criar requisição";
@@ -3354,18 +3358,8 @@ function abrirModalEdicao(id, versaoVista){
   versaoVistaEdicao = versaoVista != null ? versaoVista : r.versao;
   modalTituloEl.textContent = "Editar Requisição de Compra";
   modalCriarBtn.textContent = "Salvar alterações";
-  document.getElementById("fSolicitante").value = r.solicitante || "";
-  fOrigem.value = r.origem || "";
-  fProjeto.value = r.projetoNumero || "";
-  document.getElementById("fPrioridade").value = r.prioridade || "normal";
-  document.getElementById("fObs").value = r.observacao || "";
-  fAnexoEl.value = "";
-  fFotoEl.value = "";
-  anexosSelecionados = [...(r.anexos || [])];
-  renderAnexoLista();
-  fFaturamento.value = r.faturamentoDireto ? "sim" : "nao";
-  faturamentoAviso.style.display = r.faturamentoDireto ? "block" : "none";
-  preencherItensRapidos(r.itens || []);
+  definirModoTarefa(null);
+  preencherFormRequisicao(r);
   document.getElementById("formErro").classList.remove("show");
   modalBackdrop.classList.add("open");
 }
@@ -3373,13 +3367,11 @@ function fecharModal(){ modalBackdrop.classList.remove("open"); }
 // Cancelar/fechar durante uma edição reabre o drawer da requisição (nada foi salvo); ao criar uma
 // requisição nova não há drawer nenhum pra reabrir.
 function cancelarModal(){
+  if(tarefaForm){ cancelarFormTarefa(); return; }
   const idEditando = modoEdicaoId;
-  const vinhaDeTarefa = !!tarefaEmGeracao;
   modoEdicaoId = null;
-  tarefaEmGeracao = null;
   fecharModal();
   if(idEditando) abrirDrawer(idEditando);
-  else if(vinhaDeTarefa) abrirPainelTarefas();
 }
 
 document.getElementById("btnNovaRequisicao").addEventListener("click", abrirModalNovaRequisicao);
@@ -3555,6 +3547,8 @@ modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>
     prioridade, observacao, faturamentoDireto, anexos: anexosFinal, itens,
   };
 
+  if(tarefaForm){ salvarTarefaDoForm(dados, erroEl); return; }
+
   if(modoEdicaoId){
     // Editando uma requisição existente: mantém id, data de criação, status e comentários. O histórico
     // ganha uma entrada dizendo o que mudou. A operação confere de novo se ela ainda está Pendente.
@@ -3566,36 +3560,18 @@ modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>
     return;
   }
 
-  // Gerando a partir de uma tarefa: confere antes se ela ainda está pendente (outra pessoa pode ter gerado).
-  const tarefa = tarefaEmGeracao;
-  if(tarefa){
-    const erroTarefa = erroGerarDaTarefa(tarefa.id, tarefa.versao, tarefa.data);
-    if(erroTarefa){ erroEl.textContent = erroTarefa; erroEl.classList.add("show"); return; }
-  }
-
   const resultado = opCriarRequisicao(chaveNovaRequisicao, dados);
   if(!resultado.ok){ erroEl.textContent = resultado.erro; erroEl.classList.add("show"); return; }
-  tarefaEmGeracao = null;
   fecharModal();
   concluirOperacao(resultado, resultado.r.id);
-  if(tarefa){
-    // FIREBASE: criar a requisição e concluir a tarefa na mesma transação (FIREBASE-AJUSTES.md).
-    const fim = opConcluirOcorrencia(tarefa.id, tarefa.versao, tarefa.data, resultado.r.id);
-    if(!fim.ok) mostrarAviso(fim.erro, "erro");
-    else mostrarAviso(fim.proxima
-      ? `Tarefa ${fim.t.id}: data realizada. A próxima é ${fmtDataHora(fim.proxima)}.`
-      : `Tarefa ${fim.t.id}: data realizada. Não há mais datas pendentes.`);
-    atualizarBadgeTarefas();
-  } else if(!resultado.repetido){
-    abrirPerguntaGerarTarefa(resultado.r.id);
-  }
+  if(!resultado.repetido) abrirPerguntaGerarTarefa(resultado.r.id);
 }));
 
 // ---------- TAREFAS (requisições que se repetem) ----------
 // Quem faz a mesma compra com frequência cadastra uma tarefa recorrente: descrição, data inicial e hora,
 // quantas vezes repete por semana/mês/ano, até quando (data final ou renovação automática) e lembrete.
-// Cada data é uma ocorrência: "Gerar requisição" abre o formulário preenchido e, ao criar, aquela data vira
-// Realizada (fica no histórico da tarefa com o número da requisição).
+// A tarefa guarda a requisição completa (modelo). Cada data é uma ocorrência: um clique em "Gerar requisição"
+// cria a requisição e aquela data vira Realizada (fica no histórico da tarefa com o número da requisição).
 // Ficam na memória, como as requisições. FIREBASE: coleção tarefas/{id} (FIREBASE-AJUSTES.md).
 const TAREFAS = [];
 let PROX_TAREFA_ID = 1;
@@ -3681,9 +3657,17 @@ function proximaPendente(t){
   return null;
 }
 
-// dados: {descricao, dataInicial (Date com hora), vezes, unidade, termino ("data"|"automatica"), dataFinal (Date), lembreteMin, modelo}
-function erroDadosTarefa(d){
-  if(!d.descricao || !d.descricao.trim()) return "Escreva a descrição da tarefa.";
+// Mesmas regras do formulário da requisição: sem isso, o clique em "Gerar requisição" não teria o que criar.
+function erroModeloTarefa(m){
+  if(!m) return "Preencha os dados da requisição.";
+  if(!m.solicitante || !m.solicitante.trim()) return "Informe o nome do solicitante.";
+  if(!m.origem) return "Selecione a origem (Obras, Manutenção ou Administração).";
+  if(!m.projetoNumero) return "Informe o número do projeto.";
+  if(!m.observacao || !m.observacao.trim()) return "Preencha a observação.";
+  return erroQuantidadeItens(m.itens || []);
+}
+// Só a programação (também usada na prévia das datas, antes de o resto estar preenchido).
+function erroRepeticaoTarefa(d){
   if(!(d.dataInicial instanceof Date) || isNaN(d.dataInicial)) return "Informe a data inicial e a hora.";
   if(!(d.unidade in UNIDADE_LABEL)) return "Escolha o período da repetição (semana, mês ou ano).";
   const vezes = Number(d.vezes);
@@ -3696,6 +3680,13 @@ function erroDadosTarefa(d){
   if(!(String(d.lembreteMin) in LEMBRETE_LABEL)) return "Escolha quando quer ser lembrado.";
   return "";
 }
+// dados: {descricao, dataInicial (Date com hora), vezes, unidade, termino ("data"|"automatica"), dataFinal (Date), lembreteMin, modelo}
+function erroDadosTarefa(d){
+  const erroModelo = erroModeloTarefa(d.modelo);
+  if(erroModelo) return erroModelo;
+  if(!d.descricao || !d.descricao.trim()) return "Escreva a descrição da tarefa.";
+  return erroRepeticaoTarefa(d);
+}
 function normalizarDadosTarefa(d){
   const dataFinal = d.termino === "data" ? new Date(d.dataFinal.getFullYear(), d.dataFinal.getMonth(), d.dataFinal.getDate(), 23, 59, 59, 999) : null;
   return {descricao: d.descricao.trim(), dataInicial: new Date(d.dataInicial), vezes: Number(d.vezes), unidade: d.unidade,
@@ -3705,6 +3696,7 @@ function modeloDaRequisicao(r){
   return {
     solicitante:r.solicitante, origem:r.origem, projetoNumero:r.projetoNumero, projetoNome:r.projetoNome,
     prioridade:r.prioridade, observacao:r.observacao, faturamentoDireto:r.faturamentoDireto,
+    anexos:(r.anexos||[]).map(a=> ({...a})),
     itens:(r.itens||[]).map(({recebido, ...i})=> ({...i})),
   };
 }
@@ -3776,6 +3768,22 @@ function opConcluirOcorrencia(id, versao, dataMs, requisicaoId){
   if(!r.ok) return r;
   return {ok:true, t:r.t, proxima:proximaPendente(r.t)};
 }
+// Um clique: cria a requisição com o que a tarefa guarda e marca a data como Realizada. A chave da requisição
+// sai da tarefa e da data, então a mesma data nunca gera duas requisições.
+// FIREBASE: criar a requisição e concluir a data na mesma transação (FIREBASE-AJUSTES.md).
+function opGerarRequisicaoDaTarefa(id, versao, dataMs){
+  const erro = erroGerarDaTarefa(id, versao, dataMs);
+  if(erro) return {ok:false, erro};
+  const m = obterTarefa(id).modelo;
+  const criada = opCriarRequisicao(`tarefa:${id}:${dataMs}`, Object.assign({}, m, {
+    anexos:(m.anexos||[]).map(a=> ({...a})), itens:(m.itens||[]).map(i=> ({...i})),
+  }));
+  if(!criada.ok) return criada;
+  criada.r.historico[0].motivo = `Gerada pela tarefa ${id} (data prevista ${fmtData(new Date(dataMs))}).`;
+  const fim = opConcluirOcorrencia(id, versao, dataMs, criada.r.id);
+  if(!fim.ok) return fim;
+  return {ok:true, t:fim.t, r:criada.r, proxima:fim.proxima};
+}
 
 // Lembrete: chega no sino de quem criou a tarefa, X minutos antes da data que está pendente. Cada data só
 // avisa uma vez. Aqui no protótipo só roda com a página aberta. FIREBASE: função agendada (FIREBASE-AJUSTES.md).
@@ -3827,7 +3835,7 @@ function atualizarBadgeTarefas(){
     const t = {id, chaveCriacao:"seed:" + id, versao:1, dono:s.dono, realizacoes:[], criadaEm:s.inicio, descricao:s.descricao,
       dataInicial:s.inicio, vezes:s.vezes, unidade:s.unidade, termino:s.termino,
       dataFinal: s.dataFinal ? new Date(s.dataFinal.getFullYear(), s.dataFinal.getMonth(), s.dataFinal.getDate(), 23, 59, 59, 999) : null,
-      lembreteMin:s.lembreteMin, modelo: r ? modeloDaRequisicao(r) : null};
+      lembreteMin:s.lembreteMin, modelo: Object.assign(modeloDaRequisicao(r || REQUISICOES[0]), {solicitante:s.dono})};
     datasTarefaAte(t, s.corte).forEach(d=> t.realizacoes.push({data:d.getTime(), requisicaoId: r ? r.id : null, em:d, usuario:s.dono}));
     TAREFAS.push(t);
   });
@@ -3933,7 +3941,8 @@ document.getElementById("tarefasClose").addEventListener("click", fecharPainelTa
 tarefasBackdrop.addEventListener("click", (e)=>{ if(e.target === tarefasBackdrop) fecharPainelTarefas(); });
 [tfFiltroSituacao, tfFiltroPeriodo, tfFiltroVer].forEach(el=> el.addEventListener("change", renderPainelTarefas));
 // Cliques de link e botões, iguais no painel e no histórico da tarefa.
-function tratarCliqueTarefas(e, aoSair){
+// aoAtualizar: redesenha a tela atual depois de gerar (o usuário continua nela).
+function tratarCliqueTarefas(e, aoSair, aoAtualizar){
   const link = e.target.closest(".link-req");
   if(link){
     if(!obterRequisicao(link.dataset.req)){ mostrarAviso(`A requisição ${link.dataset.req} não existe mais (foi excluída).`, "erro"); return true; }
@@ -3945,13 +3954,17 @@ function tratarCliqueTarefas(e, aoSair){
   if(!btn) return false;
   const t = obterTarefa(btn.dataset.id);
   if(!t) return true;
+  if(btn.dataset.acao === "gerar"){
+    // O 2º clique de um clique duplo não vale: a lista muda e ele poderia cair no botão da data seguinte.
+    if(e.detail <= 1) gerarRequisicaoDaTarefa(t.id, Number(btn.dataset.data), aoAtualizar);
+    return true;
+  }
   aoSair();
-  if(btn.dataset.acao === "gerar") gerarRequisicaoDaTarefa(t.id, Number(btn.dataset.data));
-  else if(btn.dataset.acao === "historico") abrirHistoricoTarefa(t.id);
+  if(btn.dataset.acao === "historico") abrirHistoricoTarefa(t.id);
   return true;
 }
 document.getElementById("tarefasLista").addEventListener("click", (e)=>{
-  if(tratarCliqueTarefas(e, fecharPainelTarefas)) return;
+  if(tratarCliqueTarefas(e, fecharPainelTarefas, renderPainelTarefas)) return;
   const linha = e.target.closest(".tl-desc");
   if(linha){ fecharPainelTarefas(); abrirHistoricoTarefa(linha.closest(".tarefa-linha").dataset.tarefa); }
 });
@@ -3960,38 +3973,23 @@ document.getElementById("btnIncluirTarefa").addEventListener("click", ()=>{
   abrirFormTarefa({});
 });
 
-// "Gerar requisição": abre o formulário de nova requisição preenchido com o modelo da tarefa (ou só com a
-// descrição, se a tarefa não tem modelo). Ao criar, o formulário marca aquela data como Realizada (ver modalCriar).
-function gerarRequisicaoDaTarefa(id, dataMs){
+function gerarRequisicaoDaTarefa(id, dataMs, aoAtualizar){
   const t = obterTarefa(id);
-  const erro = t ? erroGerarDaTarefa(t.id, t.versao, dataMs) : "Esta tarefa não existe mais (foi excluída).";
-  if(erro){ mostrarAviso(erro, "erro"); abrirPainelTarefas(); return; }
-  abrirModalNovaRequisicao();
-  tarefaEmGeracao = {id: t.id, versao: t.versao, data: dataMs};
-  modalTituloEl.textContent = `Nova Requisição — tarefa ${t.id} (${fmtData(new Date(dataMs))})`;
-  const m = t.modelo;
-  if(m){
-    document.getElementById("fSolicitante").value = m.solicitante || usuarioAtualNome();
-    fOrigem.value = m.origem || "";
-    fProjeto.value = m.projetoNumero || "";
-    document.getElementById("fPrioridade").value = m.prioridade || "normal";
-    document.getElementById("fObs").value = m.observacao || t.descricao;
-    fFaturamento.value = m.faturamentoDireto ? "sim" : "nao";
-    faturamentoAviso.style.display = m.faturamentoDireto ? "block" : "none";
-    if(m.itens && m.itens.length) preencherItensRapidos(m.itens);
-  } else {
-    document.getElementById("fObs").value = t.descricao;
-  }
+  const resultado = opGerarRequisicaoDaTarefa(id, t.versao, dataMs);
+  concluirOperacao(resultado, null);
+  atualizarBadgeTarefas();
+  aoAtualizar();
+  if(resultado.ok) mostrarAviso(`Requisição ${resultado.r.id} gerada pela tarefa ${id}.`);
 }
 
 // ---------- HISTÓRICO DA TAREFA (passado e futuro) ----------
 const tarefaHistBackdrop = document.getElementById("tarefaHistBackdrop");
 let tarefaHistId = null;
-function descreverModelo(m, reqId){
-  const itens = (m.itens || []).length;
-  return `Ao gerar, o formulário vem preenchido${reqId ? ` com os dados da requisição <b>${escapeHtml(reqId)}</b>` : ""}: `
-    + `${escapeHtml(m.projetoNumero || "sem projeto")}${m.projetoNome ? " — " + escapeHtml(m.projetoNome) : ""}, prioridade ${escapeHtml(PRIORIDADE_LABEL[m.prioridade] || "Normal")}, `
-    + `${itens ? itens + (itens === 1 ? " item" : " itens") : "sem itens"}. Os anexos não são copiados (cada vez leva o seu).`;
+function descreverModelo(m){
+  const itens = (m.itens || []).length, anexos = (m.anexos || []).length;
+  return `Cada requisição é gerada com: ${escapeHtml(m.solicitante)} · ${escapeHtml(m.origem)} · `
+    + `${escapeHtml(m.projetoNumero)}${m.projetoNome ? " — " + escapeHtml(m.projetoNome) : ""} · prioridade ${escapeHtml(PRIORIDADE_LABEL[m.prioridade] || "Normal")} · `
+    + `${itens ? itens + (itens === 1 ? " item" : " itens") : "sem itens"} · ${anexos ? anexos + (anexos === 1 ? " anexo" : " anexos") : "sem anexos"}.`;
 }
 function abrirHistoricoTarefa(id){
   const t = obterTarefa(id);
@@ -4033,7 +4031,7 @@ function fecharHistoricoTarefa(){ tarefaHistBackdrop.classList.remove("open"); t
 document.getElementById("tarefaHistClose").addEventListener("click", fecharHistoricoTarefa);
 document.getElementById("tarefaHistVoltar").addEventListener("click", ()=>{ fecharHistoricoTarefa(); abrirPainelTarefas(); });
 tarefaHistBackdrop.addEventListener("click", (e)=>{ if(e.target === tarefaHistBackdrop) fecharHistoricoTarefa(); });
-document.getElementById("tarefaHistCorpo").addEventListener("click", (e)=> tratarCliqueTarefas(e, fecharHistoricoTarefa));
+document.getElementById("tarefaHistCorpo").addEventListener("click", (e)=> tratarCliqueTarefas(e, fecharHistoricoTarefa, ()=> abrirHistoricoTarefa(tarefaHistId)));
 document.getElementById("tarefaHistEditar").addEventListener("click", ()=>{
   const id = tarefaHistId;
   fecharHistoricoTarefa();
@@ -4046,9 +4044,7 @@ document.getElementById("tarefaHistExcluir").addEventListener("click", ()=>{
 });
 
 // ---------- FORMULÁRIO DA TAREFA RECORRENTE (incluir / editar / a partir de uma requisição) ----------
-const tarefaFormBackdrop = document.getElementById("tarefaFormBackdrop");
-const tarefaErroEl = document.getElementById("tarefaErro");
-let tarefaForm = null; // {chave} ao criar; {editarId, versao} ao editar; reqOrigemId quando veio de "Gerar tarefa?"
+// É o formulário da requisição (modalBackdrop) com os campos da programação à mostra (tarefaCampos).
 function dataParaInput(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function horaParaInput(d){ return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
 function lerDataInput(id, hora){
@@ -4058,7 +4054,7 @@ function lerDataInput(id, hora){
   const [hh, mm] = /^\d{2}:\d{2}$/.test(hora || "") ? hora.split(":").map(Number) : [0, 0];
   return new Date(a, m - 1, d, hh, mm);
 }
-function dadosDoFormTarefa(){
+function dadosDoFormTarefa(modelo){
   const hora = document.getElementById("tHora").value;
   return {
     descricao: document.getElementById("tDescricao").value,
@@ -4068,19 +4064,19 @@ function dadosDoFormTarefa(){
     termino: document.getElementById("tTerminoAuto").checked ? "automatica" : "data",
     dataFinal: lerDataInput("tDataFinal"),
     lembreteMin: document.getElementById("tLembrete").value,
-    modelo: tarefaForm ? tarefaForm.modelo : null,
+    modelo,
   };
 }
 // Prévia das datas: mostra o que a repetição escolhida vai gerar, antes de salvar.
 function atualizarPreviaTarefa(){
-  const dados = dadosDoFormTarefa();
+  const dados = dadosDoFormTarefa(null);
   const auto = dados.termino === "automatica";
   document.getElementById("tDataFinal").disabled = auto;
   document.getElementById("tVezes").max = MAX_VEZES[dados.unidade];
   const previa = document.getElementById("tPrevia");
-  const erro = erroDadosTarefa(Object.assign({}, dados, {descricao: "x"}));
+  const erro = erroRepeticaoTarefa(dados);
   if(erro){ previa.textContent = erro; return; }
-  const t = normalizarDadosTarefa(dados);
+  const t = normalizarDadosTarefa(Object.assign({}, dados, {descricao: "x"}));
   const datas = [];
   for(const d of gerarDatasTarefa(t)){ datas.push(d); if(datas.length >= 7) break; }
   const mais = datas.length > 6;
@@ -4094,16 +4090,18 @@ function atualizarPreviaTarefa(){
 });
 // opcoes: {editarId} | {reqOrigemId} | {}
 function abrirFormTarefa(opcoes){
-  tarefaErroEl.classList.remove("show");
   const t = opcoes.editarId ? obterTarefa(opcoes.editarId) : null;
+  const r = opcoes.reqOrigemId ? obterRequisicao(opcoes.reqOrigemId) : null;
+  abrirModalNovaRequisicao(); // limpa os campos da requisição
   let base;
   if(t){
-    tarefaForm = {editarId: t.id, versao: t.versao, modelo: t.modelo};
+    definirModoTarefa({editarId: t.id, versao: t.versao});
     base = t;
-    document.getElementById("tarefaFormTitulo").textContent = `Editar tarefa recorrente ${t.id}`;
+    preencherFormRequisicao(t.modelo);
+    modalTituloEl.textContent = `Editar tarefa recorrente ${t.id}`;
   } else {
-    const r = opcoes.reqOrigemId ? obterRequisicao(opcoes.reqOrigemId) : null;
-    tarefaForm = {chave: novaChaveEnvio(), modelo: r ? modeloDaRequisicao(r) : null, reqOrigemId: r ? r.id : null};
+    definirModoTarefa({chave: novaChaveEnvio(), reqOrigemId: r ? r.id : null});
+    if(r) preencherFormRequisicao(modeloDaRequisicao(r));
     const hoje = new Date();
     // Vindo de uma requisição: começa no dia dela (que já fica Realizada). Do zero: amanhã. Termina em 1 ano.
     const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + (r ? 0 : 1), 9, 0);
@@ -4112,8 +4110,9 @@ function abrirFormTarefa(opcoes){
       dataInicial: inicio, vezes: 1, unidade: "mes", termino: "data",
       dataFinal: new Date(inicio.getFullYear() + 1, inicio.getMonth(), inicio.getDate()), lembreteMin: 30,
     };
-    document.getElementById("tarefaFormTitulo").textContent = r ? `Tarefa recorrente a partir da ${r.id}` : "Tarefa recorrente";
+    modalTituloEl.textContent = r ? `Tarefa recorrente a partir da ${r.id}` : "Tarefa recorrente";
   }
+  modalCriarBtn.textContent = "Salvar tarefa";
   document.getElementById("tDescricao").value = base.descricao;
   document.getElementById("tData").value = dataParaInput(base.dataInicial);
   document.getElementById("tHora").value = horaParaInput(base.dataInicial);
@@ -4123,34 +4122,26 @@ function abrirFormTarefa(opcoes){
   document.getElementById("tTerminoAuto").checked = base.termino === "automatica";
   document.getElementById("tDataFinal").value = base.dataFinal ? dataParaInput(base.dataFinal) : "";
   document.getElementById("tLembrete").value = String(base.lembreteMin);
-  const modeloWrap = document.getElementById("tModeloWrap");
-  modeloWrap.style.display = tarefaForm.modelo ? "" : "none";
-  if(tarefaForm.modelo) document.getElementById("tModeloInfo").innerHTML = descreverModelo(tarefaForm.modelo, tarefaForm.reqOrigemId);
   atualizarPreviaTarefa();
   fecharPainelTarefas();
-  tarefaFormBackdrop.classList.add("open");
+  modalBackdrop.querySelector(".modal-body").scrollTop = 0;
 }
 function cancelarFormTarefa(){
-  const reqOrigemId = tarefaForm && tarefaForm.reqOrigemId;
-  const editarId = tarefaForm && tarefaForm.editarId;
-  tarefaFormBackdrop.classList.remove("open");
-  tarefaForm = null;
+  const {reqOrigemId, editarId} = tarefaForm;
+  definirModoTarefa(null);
+  fecharModal();
   if(reqOrigemId) abrirDrawer(reqOrigemId);
   else if(editarId) abrirHistoricoTarefa(editarId);
   else abrirPainelTarefas();
 }
-document.getElementById("tarefaFormClose").addEventListener("click", cancelarFormTarefa);
-document.getElementById("tarefaCancelar").addEventListener("click", cancelarFormTarefa);
-tarefaFormBackdrop.addEventListener("click", (e)=>{ if(e.target === tarefaFormBackdrop) cancelarFormTarefa(); });
-const btnTarefaSalvar = document.getElementById("tarefaSalvar");
-btnTarefaSalvar.addEventListener("click", ()=> comBotaoTravado(btnTarefaSalvar, ()=>{
-  if(!tarefaForm) return;
-  const dados = dadosDoFormTarefa();
+// Chamada pelo botão do formulário, depois de conferir os campos da requisição. modelo: os dados da requisição.
+function salvarTarefaDoForm(modelo, erroEl){
+  const dados = dadosDoFormTarefa(modelo);
   const resultado = tarefaForm.editarId ? opEditarTarefa(tarefaForm.editarId, tarefaForm.versao, dados)
     : opCriarTarefa(tarefaForm.chave, dados, tarefaForm.reqOrigemId);
-  if(!resultado.ok){ tarefaErroEl.textContent = resultado.erro; tarefaErroEl.classList.add("show"); return; }
-  tarefaFormBackdrop.classList.remove("open");
-  tarefaForm = null;
+  if(!resultado.ok){ erroEl.textContent = resultado.erro; erroEl.classList.add("show"); return; }
+  definirModoTarefa(null);
+  fecharModal();
   // Mostra o mês da próxima data pendente, para a tarefa aparecer na lista.
   const prox = proximaPendente(resultado.t) || resultado.t.dataInicial;
   const h = new Date();
@@ -4161,7 +4152,7 @@ btnTarefaSalvar.addEventListener("click", ()=> comBotaoTravado(btnTarefaSalvar, 
   atualizarBadgeTarefas();
   abrirPainelTarefas();
   mostrarAviso(`Tarefa ${resultado.t.id} salva: ${descreverRecorrencia(resultado.t)}, ${descreverTermino(resultado.t)}.`);
-}));
+}
 
 // ---------- EXCLUIR TAREFA ----------
 const excluirTarefaBackdrop = document.getElementById("excluirTarefaBackdrop");
