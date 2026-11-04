@@ -445,4 +445,99 @@ test.describe("9. Painel de Tarefas", () => {
     await page.selectOption("#tfFiltroPeriodo", "proximo");
     await expect(page.locator("#tarefasLista")).toContainText(/Pendente|Prevista/);
   });
+
+  test.describe("9.17 desfazer uma geração feita por engano", () => {
+    // Gera a primeira data pendente pela operação (preparação de cenário) e devolve a data e a requisição.
+    function gerar(page, id) {
+      return page.evaluate((id) => {
+        const t = obterTarefa(id), data = proximaPendente(t).getTime();
+        const res = opGerarRequisicaoDaTarefa(id, t.versao, data);
+        if (!res.ok) throw new Error(res.erro);
+        return { data, reqId: res.r.id };
+      }, id);
+    }
+
+    test("quando desfaço pelo histórico, então a requisição fica Cancelada com o motivo e a data volta para Pendente", async ({ page }) => {
+      await abrirApp(page, { usuario: DONO, gestor: false });
+      const id = await criarTarefa(page, { dias: 0, hora: 23 });
+      const { data, reqId } = await gerar(page, id);
+      await page.evaluate((id) => abrirHistoricoTarefa(id), id);
+      await page.click(`#tarefaHistFeitas [data-acao="desfazer"][data-data="${data}"]`);
+
+      const r = await requisicaoGerada(page, reqId);
+      expect(r.status).toBe("cancelado");
+      expect(r.motivoCancelamento).toContain("Gerada por engano");
+      const t = await tarefa(page, id);
+      expect(t.realizacoes).toHaveLength(0);
+      expect(t.desfeitas.map((x) => x.requisicaoId)).toEqual([reqId]);
+      expect(await primeiraPendente(page, id)).toBe(data);
+      await expect(page.locator("#tarefaHistDesfeitas")).toContainText(reqId);
+      await expect(page.locator("#tarefaHistPendentes")).toContainText("Gerar requisição");
+    });
+
+    test("quando gero de novo depois de desfazer, então nasce uma requisição nova", async ({ page }) => {
+      await abrirApp(page, { usuario: DONO, gestor: false });
+      const id = await criarTarefa(page, { dias: 0, hora: 23 });
+      const primeira = await gerar(page, id);
+      await page.evaluate(([id, data]) => opDesfazerGeracao(id, obterTarefa(id).versao, data), [id, primeira.data]);
+      const segunda = await gerar(page, id);
+      expect(segunda.data).toBe(primeira.data);
+      expect(segunda.reqId).not.toBe(primeira.reqId);
+      expect((await requisicaoGerada(page, segunda.reqId)).status).toBe("pendente");
+    });
+
+    test("quando clico em Desfazer no aviso logo depois de gerar, então a geração é desfeita", async ({ page }) => {
+      await abrirApp(page, { usuario: DONO, gestor: false });
+      const id = await criarTarefa(page, { dias: 0, hora: 23 });
+      const data = await primeiraPendente(page, id);
+      await page.click("#btnTarefas");
+      await page.click(`#tarefasLista [data-acao="gerar"][data-id="${id}"][data-data="${data}"]`);
+      const reqId = (await tarefa(page, id)).realizacoes[0].requisicaoId;
+      await page.click("#avisoToast .aviso-acao");
+      expect((await requisicaoGerada(page, reqId)).status).toBe("cancelado");
+      expect((await tarefa(page, id)).realizacoes).toHaveLength(0);
+      await expect(page.locator(`#tarefasLista .tarefa-linha[data-data="${data}"]`)).toContainText("Pendente");
+    });
+
+    test("quando a requisição já saiu de Pendente, então desfazer é recusado e nada muda", async ({ page }) => {
+      await abrirApp(page, { usuario: DONO, gestor: false });
+      const id = await criarTarefa(page, { dias: 0, hora: 23 });
+      const { data, reqId } = await gerar(page, id);
+      const res = await page.evaluate(([id, data, reqId]) => {
+        opAssumirCompra(reqId, obterRequisicao(reqId).versao, "Rafael Tavares");
+        return opDesfazerGeracao(id, obterTarefa(id).versao, data);
+      }, [id, data, reqId]);
+      expect(res.ok).toBe(false);
+      expect(res.erro).toContain("não pode mais ser desfeita");
+      expect((await requisicaoGerada(page, reqId)).status).toBe("elaboracao");
+      expect((await tarefa(page, id)).realizacoes).toHaveLength(1);
+      await page.evaluate((id) => abrirHistoricoTarefa(id), id);
+      await expect(page.locator('#tarefaHistFeitas [data-acao="desfazer"]')).toHaveCount(0);
+    });
+
+    test("quando duas pessoas desfazem ao mesmo tempo, então só uma vale e a requisição é cancelada uma vez", async ({ page }) => {
+      await abrirApp(page, { usuario: DONO, gestor: false });
+      const id = await criarTarefa(page, { dias: 0, hora: 23 });
+      const { data, reqId } = await gerar(page, id);
+      const r = await page.evaluate(([id, data, reqId]) => {
+        const versao = obterTarefa(id).versao;
+        return Promise.all([1, 2].map(async () => opDesfazerGeracao(id, versao, data))).then((res) => ({
+          oks: res.filter((x) => x.ok).length,
+          desfeitas: obterTarefa(id).desfeitas.length,
+          cancelamentos: obterRequisicao(reqId).historico.filter((h) => h.status === "cancelado").length,
+        }));
+      }, [id, data, reqId]);
+      expect(r).toEqual({ oks: 1, desfeitas: 1, cancelamentos: 1 });
+    });
+
+    test("quando outra pessoa tenta desfazer, então é recusado", async ({ page }) => {
+      await abrirApp(page, { usuario: DONO, gestor: false });
+      const id = await criarTarefa(page, { dias: 0, hora: 23 });
+      const { data, reqId } = await gerar(page, id);
+      await comoUsuario(page, "Pessoa Sem Permissão");
+      const res = await page.evaluate(([id, data]) => opDesfazerGeracao(id, obterTarefa(id).versao, data), [id, data]);
+      expect(res.ok).toBe(false);
+      expect((await requisicaoGerada(page, reqId)).status).toBe("pendente");
+    });
+  });
 });

@@ -366,6 +366,8 @@
   .aviso-toast{position:fixed; left:50%; bottom:24px; transform:translate(-50%, 20px); max-width:min(520px, calc(100vw - 32px)); background:var(--panel); color:var(--text); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13px; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,.18); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:2000; cursor:pointer;}
   .aviso-toast.open{opacity:1; transform:translate(-50%, 0); pointer-events:auto;}
   .aviso-toast.erro{border-left-color:var(--danger);}
+  .aviso-acao{margin-left:8px; background:none; border:1px solid var(--accent); color:var(--accent); border-radius:7px; padding:3px 10px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;}
+  .aviso-acao:hover{background:rgba(59,130,246,.08);}
   .form-erro.show{display:block;}
 
   .itens-lista{display:flex; flex-direction:column; gap:10px; margin:8px 0;}
@@ -2549,8 +2551,17 @@ function comBotaoTravado(btn, acao){
 // Mensagem curta no rodapé, no mesmo visual do app; some sozinha ou ao clicar.
 const avisoToast = document.getElementById("avisoToast");
 let avisoTimer = null;
-function mostrarAviso(texto, tipo){
+// acao (opcional): {rotulo, fn} — um botão dentro do aviso (ex.: "Desfazer").
+function mostrarAviso(texto, tipo, acao){
   avisoToast.textContent = texto;
+  if(acao){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "aviso-acao";
+    btn.textContent = acao.rotulo;
+    btn.addEventListener("click", (e)=>{ e.stopPropagation(); avisoToast.classList.remove("open"); acao.fn(); });
+    avisoToast.append(" ", btn);
+  }
   avisoToast.classList.toggle("erro", tipo === "erro");
   avisoToast.classList.add("open");
   clearTimeout(avisoTimer);
@@ -3722,7 +3733,7 @@ function opCriarTarefa(chave, dados, requisicaoInicialId){
   if(!dono) return {ok:false, erro:"Defina seu usuário no 👤 antes de criar tarefas."};
   const erro = erroDadosTarefa(dados);
   if(erro) return {ok:false, erro};
-  const t = Object.assign({id: novoIdTarefa(), chaveCriacao:chave, versao:1, dono, realizacoes:[], criadaEm:new Date()}, normalizarDadosTarefa(dados));
+  const t = Object.assign({id: novoIdTarefa(), chaveCriacao:chave, versao:1, dono, realizacoes:[], desfeitas:[], criadaEm:new Date()}, normalizarDadosTarefa(dados));
   const req = requisicaoInicialId ? obterRequisicao(requisicaoInicialId) : null;
   if(req && inicioDoDia(req.data).getTime() === inicioDoDia(t.dataInicial).getTime()){
     t.realizacoes.push({data: t.dataInicial.getTime(), requisicaoId: req.id, em: new Date(req.data), usuario: dono});
@@ -3775,7 +3786,9 @@ function opGerarRequisicaoDaTarefa(id, versao, dataMs){
   const erro = erroGerarDaTarefa(id, versao, dataMs);
   if(erro) return {ok:false, erro};
   const m = obterTarefa(id).modelo;
-  const criada = opCriarRequisicao(`tarefa:${id}:${dataMs}`, Object.assign({}, m, {
+  // A chave conta as gerações desfeitas dessa data: depois de desfazer, gerar de novo cria outra requisição.
+  const vez = obterTarefa(id).desfeitas.filter(x=> x.data === dataMs).length;
+  const criada = opCriarRequisicao(`tarefa:${id}:${dataMs}` + (vez ? `:${vez}` : ""), Object.assign({}, m, {
     anexos:(m.anexos||[]).map(a=> ({...a})), itens:(m.itens||[]).map(i=> ({...i})),
   }));
   if(!criada.ok) return criada;
@@ -3783,6 +3796,39 @@ function opGerarRequisicaoDaTarefa(id, versao, dataMs){
   const fim = opConcluirOcorrencia(id, versao, dataMs, criada.r.id);
   if(!fim.ok) return fim;
   return {ok:true, t:fim.t, r:criada.r, proxima:fim.proxima};
+}
+// Desfazer uma geração feita por engano: a requisição fica Cancelada, com o motivo, e a data volta a Pendente.
+// Só enquanto a requisição está Pendente; depois que a compra andou, o caminho é cancelar pelo fluxo normal.
+function erroDesfazerGeracao(t, dataMs){
+  if(!podeAlterarTarefa(t)) return `Só ${t.dono} (quem criou) ou o gestor geral podem desfazer a geração da tarefa ${t.id}.`;
+  const feita = realizacaoEm(t, dataMs);
+  if(!feita) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} não tem requisição gerada (já foi desfeita?).`;
+  const r = feita.requisicaoId && obterRequisicao(feita.requisicaoId);
+  if(r && r.status !== "pendente") return `A requisição ${r.id} já está em "${STATUS_LABEL[r.status]}" e não pode mais ser desfeita por aqui. Se precisar, cancele a requisição pelo fluxo normal, com o motivo.`;
+  if(r) return erroTransicao(r, "cancelado");
+  return "";
+}
+function podeDesfazerGeracao(t, dataMs){ return !erroDesfazerGeracao(t, dataMs); }
+// FIREBASE: cancelar a requisição e devolver a data na mesma transação (FIREBASE-AJUSTES.md).
+function opDesfazerGeracao(id, versao, dataMs){
+  const t0 = obterTarefa(id);
+  if(!t0) return {ok:false, erro:"Esta tarefa não existe mais (foi excluída)."};
+  const erro = erroDesfazerGeracao(t0, dataMs);
+  if(erro) return {ok:false, erro};
+  const feita = realizacaoEm(t0, dataMs);
+  const req = feita.requisicaoId ? obterRequisicao(feita.requisicaoId) : null;
+  const r = gravarTarefa(id, versao, t=>{
+    if(realizacaoEm(t, dataMs) !== feita) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} já foi desfeita.`;
+    t.realizacoes.splice(t.realizacoes.indexOf(feita), 1);
+    t.desfeitas.push({data: dataMs, requisicaoId: feita.requisicaoId, em: new Date(), usuario: usuarioAtualNome()});
+  });
+  if(!r.ok) return r;
+  if(req){
+    const motivo = `Gerada por engano pela tarefa ${id} (data ${fmtData(new Date(dataMs))}) — desfeita por ${usuarioAtualNome() || "usuário não identificado"}. A data voltou para Pendente na tarefa.`;
+    const c = opCancelar(req.id, req.versao, motivo);
+    if(!c.ok) return c;
+  }
+  return {ok:true, t:r.t, requisicaoId: feita.requisicaoId};
 }
 
 // Lembrete: chega no sino de quem criou a tarefa, X minutos antes da data que está pendente. Cada data só
@@ -3832,7 +3878,7 @@ function atualizarBadgeTarefas(){
   series.forEach(s=>{
     const r = REQUISICOES.find(x=> x.solicitante === s.dono);
     const id = novoIdTarefa();
-    const t = {id, chaveCriacao:"seed:" + id, versao:1, dono:s.dono, realizacoes:[], criadaEm:s.inicio, descricao:s.descricao,
+    const t = {id, chaveCriacao:"seed:" + id, versao:1, dono:s.dono, realizacoes:[], desfeitas:[], criadaEm:s.inicio, descricao:s.descricao,
       dataInicial:s.inicio, vezes:s.vezes, unidade:s.unidade, termino:s.termino,
       dataFinal: s.dataFinal ? new Date(s.dataFinal.getFullYear(), s.dataFinal.getMonth(), s.dataFinal.getDate(), 23, 59, 59, 999) : null,
       lembreteMin:s.lembreteMin, modelo: Object.assign(modeloDaRequisicao(r || REQUISICOES[0]), {solicitante:s.dono})};
@@ -3887,6 +3933,9 @@ function badgeSituacao(l){
 function linkRequisicao(id){
   return id ? `<button type="button" class="link-req" data-req="${escapeHtml(id)}">${escapeHtml(id)}</button>` : "—";
 }
+function botaoDesfazer(t, ms){
+  return `<button type="button" class="req-btn cancelar" data-acao="desfazer" data-id="${t.id}" data-data="${ms}" title="Gerada por engano? Cancela a requisição e a data volta para Pendente">↩ Desfazer</button>`;
+}
 function botaoGerar(t, d){
   return `<button type="button" class="req-btn" data-acao="gerar" data-id="${t.id}" data-data="${d.getTime()}">▶ Gerar requisição</button>`;
 }
@@ -3909,6 +3958,7 @@ function renderPainelTarefas(){
       const t = l.t;
       const pode = podeAlterarTarefa(t);
       const acoes = (l.status === "pendente" && pode ? botaoGerar(t, l.data) : "")
+        + (l.status === "realizada" && podeDesfazerGeracao(t, l.data.getTime()) ? botaoDesfazer(t, l.data.getTime()) : "")
         + `<button type="button" class="req-btn" data-acao="historico" data-id="${t.id}" title="Histórico da tarefa">🕓 Histórico</button>`;
       return `<div class="tarefa-linha${l.status === "prevista" ? " prevista" : ""}" data-tarefa="${t.id}" data-data="${l.data.getTime()}">
         <div class="tl-previsao">${fmtPrevisao(l.data)}</div>
@@ -3959,6 +4009,10 @@ function tratarCliqueTarefas(e, aoSair, aoAtualizar){
     if(e.detail <= 1) gerarRequisicaoDaTarefa(t.id, Number(btn.dataset.data), aoAtualizar);
     return true;
   }
+  if(btn.dataset.acao === "desfazer"){
+    if(e.detail <= 1) desfazerGeracao(t.id, Number(btn.dataset.data), aoAtualizar);
+    return true;
+  }
   aoSair();
   if(btn.dataset.acao === "historico") abrirHistoricoTarefa(t.id);
   return true;
@@ -3979,7 +4033,17 @@ function gerarRequisicaoDaTarefa(id, dataMs, aoAtualizar){
   concluirOperacao(resultado, null);
   atualizarBadgeTarefas();
   aoAtualizar();
-  if(resultado.ok) mostrarAviso(`Requisição ${resultado.r.id} gerada pela tarefa ${id}.`);
+  if(resultado.ok) mostrarAviso(`Requisição ${resultado.r.id} gerada pela tarefa ${id}.`, "", {rotulo:"↩ Desfazer", fn:()=> desfazerGeracao(id, dataMs, aoAtualizar)});
+}
+function desfazerGeracao(id, dataMs, aoAtualizar){
+  const t = obterTarefa(id);
+  const resultado = t ? opDesfazerGeracao(id, t.versao, dataMs) : {ok:false, erro:"Esta tarefa não existe mais (foi excluída)."};
+  concluirOperacao(resultado, null);
+  atualizarBadgeTarefas();
+  if(tarefasBackdrop.classList.contains("open")) renderPainelTarefas();
+  else if(tarefaHistId) abrirHistoricoTarefa(tarefaHistId);
+  else if(aoAtualizar) aoAtualizar();
+  if(resultado.ok) mostrarAviso(`Geração desfeita: ${resultado.requisicaoId ? `a requisição ${resultado.requisicaoId} foi cancelada e ` : ""}a data ${fmtData(new Date(dataMs))} voltou para Pendente.`);
 }
 
 // ---------- HISTÓRICO DA TAREFA (passado e futuro) ----------
@@ -4021,8 +4085,10 @@ function abrirHistoricoTarefa(id){
       + (temMais ? `<li class="vazio">${t.termino === "automatica" ? "Segue sem data final (renovação automática)." : `E as demais até ${fmtData(t.dataFinal)}.`}</li>` : "")
       : `<li class="vazio">${t.termino === "data" ? `Sem novas datas: a tarefa termina em ${fmtData(t.dataFinal)}.` : "Sem novas datas."}</li>`}</ul>
     <p class="tarefa-hist-titulo">Requisições geradas</p>
-    <ul class="tarefa-hist-lista" id="tarefaHistFeitas">${feitas.length ? feitas.map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${linkRequisicao(x.requisicaoId)} <span class="badge tf-realizada">Realizada</span></span>`)).join("")
-      : `<li class="vazio">Nenhuma requisição gerada ainda.</li>`}</ul>`;
+    <ul class="tarefa-hist-lista" id="tarefaHistFeitas">${feitas.length ? feitas.map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${linkRequisicao(x.requisicaoId)} <span class="badge tf-realizada">Realizada</span>${podeDesfazerGeracao(t, x.data) ? " " + botaoDesfazer(t, x.data) : ""}</span>`)).join("")
+      : `<li class="vazio">Nenhuma requisição gerada ainda.</li>`}</ul>
+    ${t.desfeitas.length ? `<p class="tarefa-hist-titulo">Gerações desfeitas</p>
+    <ul class="tarefa-hist-lista" id="tarefaHistDesfeitas">${[...t.desfeitas].sort((a,b)=> b.em - a.em).map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${linkRequisicao(x.requisicaoId)} <span class="badge st-cancelado">Cancelada</span> <span class="table-subtext">por ${escapeHtml(x.usuario || "—")} em ${fmtDataHora(x.em)}</span></span>`)).join("")}</ul>` : ""}`;
   document.getElementById("tarefaHistEditar").style.display = pode ? "" : "none";
   document.getElementById("tarefaHistExcluir").style.display = pode ? "" : "none";
   tarefaHistBackdrop.classList.add("open");
