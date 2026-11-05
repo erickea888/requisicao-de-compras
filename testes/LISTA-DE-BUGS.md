@@ -4,7 +4,7 @@ Quando um teste falha por bug real, ele **continua falhando** e o bug entra aqui
 
 Rodar todos os testes: `npm test`
 
-Última rodada: **106 testes, 106 passam** (inclui os 41 do Painel de Tarefas). Não há bug aberto.
+Última rodada: **127 testes, 127 passam** (inclui os 41 do Painel de Tarefas, os 17 dos ajustes de tarefas — pular data, fim de semana e aviso ao gerar — e os 4 da permissão de reabrir). Não há bug aberto.
 
 ## Corrigidos
 

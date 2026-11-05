@@ -424,10 +424,11 @@
   .badge.tf-pendente{background:rgba(245,158,11,.15); color:var(--warn);}
   .badge.tf-realizada{background:rgba(34,197,94,.15); color:var(--accent-2);}
   .badge.tf-prevista{background:var(--panel-2); color:var(--muted); border:1px dashed var(--border);}
+  .badge.tf-pulada{background:var(--panel-2); color:var(--muted); border:1px solid var(--border);}
   .link-req{background:none; border:none; padding:0; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:12.5px;}
   .link-req:hover{text-decoration:underline;}
   .tarefas-vazio{padding:28px 12px; text-align:center; color:var(--muted); font-size:12.5px;}
-  .tarefas-totais{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px;}
+  .tarefas-totais{display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:14px;}
   .tarefas-totais .kpi{padding:10px 14px;}
   .tarefas-totais .kpi .value{font-size:18px;}
   .tarefa-modelo{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.45;}
@@ -455,7 +456,7 @@
     .tarefa-linha .tl-rotulo{display:inline; color:var(--muted);}
     .tarefa-linha .tl-acoes{justify-content:flex-start; margin-top:4px;}
     .tarefa-linha .tl-acoes .req-btn{min-height:40px;}
-    .tarefas-totais{grid-template-columns:repeat(2,1fr);}
+    .tarefas-totais{grid-template-columns:repeat(3,1fr);}
     .tarefas-toolbar .form-field{flex:1 1 140px;}
     .tarefas-toolbar .btn-primary{width:100%; justify-content:center; margin-left:0; min-height:44px;}
   }
@@ -918,6 +919,15 @@
             <p class="form-hint">Ex.: 1 por mês = todo mês; 2 por mês = duas vezes no mês; 2 por ano = a cada 6 meses.</p>
           </div>
           <div class="form-field full">
+            <label for="tFimSemana">Se cair no sábado ou domingo</label>
+            <select id="tFimSemana">
+              <option value="manter">Manter a data</option>
+              <option value="antecipar">Antecipar para sexta-feira</option>
+              <option value="adiar">Adiar para segunda-feira</option>
+            </select>
+            <p class="form-hint">Feriados não entram nesta conta.</p>
+          </div>
+          <div class="form-field full">
             <label>Termina em *</label>
             <div class="tarefa-termino">
               <label class="tarefa-opcao"><input type="radio" name="tTermino" id="tTerminoData" value="data" checked> Na data</label>
@@ -965,6 +975,7 @@
             <option value="todas">Todas</option>
             <option value="pendente">Pendente</option>
             <option value="realizada">Realizada</option>
+            <option value="pulada">Pulada</option>
           </select>
         </div>
         <div class="form-field">
@@ -1018,6 +1029,27 @@
     <div class="modal-footer">
       <button type="button" class="req-btn" id="perguntaTarefaNao">Não</button>
       <button type="button" class="btn-primary" id="perguntaTarefaSim">Sim, gerar tarefa</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="pularDataBackdrop">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <h3>Pular esta data</h3>
+      <button type="button" class="modal-close" id="pularDataClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="pularDataTexto" style="margin:0 0 10px; font-size:13px; line-height:1.5;"></p>
+      <div class="form-field">
+        <label for="pularDataMotivo">Motivo *</label>
+        <textarea id="pularDataMotivo" placeholder="Ex.: sobrou estoque do mês passado; obra parada."></textarea>
+      </div>
+      <p class="form-erro" id="pularDataErro"></p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="req-btn" id="pularDataCancelar">Voltar</button>
+      <button type="button" class="btn-primary" id="pularDataConfirmar">Pular data</button>
     </div>
   </div>
 </div>
@@ -2062,7 +2094,7 @@ function abrirDrawer(id){
   document.getElementById("reqStatusSalvar").disabled = statusSelect.disabled;
   // Cancelada: o mesmo botão vira "Reabrir". Recebido: etapa final, sem botão.
   const btnCancelarReq = document.getElementById("reqStatusCancelar");
-  btnCancelarReq.style.display = (r.status === "recebido" || (r.status !== "cancelado" && !podeAlterar)) ? "none" : "";
+  btnCancelarReq.style.display = (r.status === "recebido" || !podeAlterar) ? "none" : "";
   btnCancelarReq.textContent = r.status === "cancelado" ? "↺ Reabrir requisição" : "Cancelar requisição";
   btnCancelarReq.classList.toggle("cancelar", r.status !== "cancelado");
   const avisoPermissaoEl = document.getElementById("reqStatusPermissaoAviso");
@@ -2282,6 +2314,8 @@ function erroTransicao(r, novoStatus){
     return `Só ${r.solicitante} (quem pediu) ou um gestor admin geral pode marcar esta requisição como "${STATUS_LABEL[novoStatus]}". Defina seu usuário no botão "👤" no topo da página.`;
   }
   if(novoStatus === "cancelado" && !podeAlterarRequisicao(r)) return erroSemPermissao(r, "cancelar");
+  // Reabrir segue a mesma regra de quem pode cancelar (combinado com o Erick em 05/11/2026).
+  if(r.status === "cancelado" && novoStatus === "pendente" && !podeAlterarRequisicao(r)) return erroSemPermissao(r, "reabrir");
   return "";
 }
 function dataDeISO(valor){ return new Date(valor + "T00:00:00"); }
@@ -3606,6 +3640,11 @@ function descreverRecorrencia(t){
 function descreverTermino(t){
   return t.termino === "automatica" ? "renovação automática" : `até ${fmtData(t.dataFinal)}`;
 }
+// Data que cai no sábado ou domingo: mantém, antecipa para a sexta anterior ou adia para a segunda seguinte.
+const FIM_SEMANA_LABEL = {manter:"mantém a data", antecipar:"antecipa para sexta", adiar:"adia para segunda"};
+function descreverFimDeSemana(t){
+  return t.ajusteFimSemana && t.ajusteFimSemana !== "manter" ? `sábado/domingo: ${FIM_SEMANA_LABEL[t.ajusteFimSemana]}` : "";
+}
 
 // Soma meses mantendo o dia (dia 31 em abril vira 30; em fevereiro, 28/29) e o horário.
 function somarMeses(base, meses, dia){
@@ -3629,11 +3668,27 @@ function datasDoCiclo(t, c){
   const dias = Math.round((prox - ini) / DIA_MS);
   return Array.from({length:n}, (_, k)=> somarDias(ini, Math.round(k * dias / n)));
 }
+// Antecipar nunca leva a data para antes da data inicial: nesse caso ela vai para a segunda seguinte.
+function ajustarFimDeSemana(d, modo, inicio){
+  const dia = d.getDay();
+  if(modo !== "antecipar" && modo !== "adiar") return d;
+  if(dia !== 0 && dia !== 6) return d;
+  if(modo === "antecipar"){
+    const antes = somarDias(d, dia === 6 ? -1 : -2);
+    if(inicioDoDia(antes) >= inicioDoDia(inicio)) return antes;
+  }
+  return somarDias(d, dia === 6 ? 2 : 1);
+}
 // Todas as datas da tarefa, em ordem, da data inicial até a data final (ou sem fim, na renovação automática).
+// Com o ajuste de fim de semana, duas datas podem cair no mesmo dia (ex.: sábado e domingo → sexta): vale uma só.
 function* gerarDatasTarefa(t){
+  let ultima = -Infinity;
   for(let c = 0; c < 5000; c++){
-    for(const d of datasDoCiclo(t, c)){
+    for(const bruta of datasDoCiclo(t, c)){
+      const d = ajustarFimDeSemana(bruta, t.ajusteFimSemana, t.dataInicial);
       if(t.termino === "data" && d > t.dataFinal) return;
+      if(d.getTime() <= ultima) continue;
+      ultima = d.getTime();
       yield d;
     }
   }
@@ -3644,27 +3699,32 @@ function datasTarefaAte(t, ate){
   return lista;
 }
 function realizacaoEm(t, ms){ return t.realizacoes.find(x=> x.data === ms); }
+// Data pulada: não precisou de compra naquela vez. Não gera requisição, não lembra e não conta como pendente.
+function puladaEm(t, ms){ return (t.puladas || []).find(x=> x.data === ms); }
+function tratadaEm(t, ms){ return realizacaoEm(t, ms) || puladaEm(t, ms); }
 function datasTarefaContem(t, ms){
   for(const d of gerarDatasTarefa(t)){ if(d.getTime() === ms) return true; if(d.getTime() > ms) return false; }
   return false;
 }
-// Situação de cada data: Realizada (gerou requisição); Pendente (já passou sem requisição, ou é a próxima);
-// Prevista (as seguintes, só para planejar).
+// Situação de cada data: Realizada (gerou requisição); Pulada (não precisou, com motivo); Pendente (já passou
+// sem requisição, ou é a próxima); Prevista (as seguintes, só para planejar).
 function primeiraFutura(t, agora){
-  for(const d of gerarDatasTarefa(t)){ if(d >= agora && !realizacaoEm(t, d.getTime())) return d.getTime(); }
+  for(const d of gerarDatasTarefa(t)){ if(d >= agora && !tratadaEm(t, d.getTime())) return d.getTime(); }
   return null;
 }
 function situacaoData(t, d, agora, futura){
   const ms = d.getTime();
   const r = realizacaoEm(t, ms);
   if(r) return {status:"realizada", requisicaoId:r.requisicaoId, atrasada:false};
+  const p = puladaEm(t, ms);
+  if(p) return {status:"pulada", motivo:p.motivo, atrasada:false};
   if(d < agora) return {status:"pendente", atrasada:true};
   if(ms === futura) return {status:"pendente", atrasada:false};
   return {status:"prevista", atrasada:false};
 }
-// A data que a tarefa está esperando agora: a mais antiga ainda sem requisição.
+// A data que a tarefa está esperando agora: a mais antiga ainda sem requisição (e não pulada).
 function proximaPendente(t){
-  for(const d of gerarDatasTarefa(t)){ if(!realizacaoEm(t, d.getTime())) return d; }
+  for(const d of gerarDatasTarefa(t)){ if(!tratadaEm(t, d.getTime())) return d; }
   return null;
 }
 
@@ -3689,6 +3749,7 @@ function erroRepeticaoTarefa(d){
     if(inicioDoDia(d.dataFinal) < inicioDoDia(d.dataInicial)) return "A data final não pode ser antes da data inicial.";
   }
   if(!(String(d.lembreteMin) in LEMBRETE_LABEL)) return "Escolha quando quer ser lembrado.";
+  if(d.ajusteFimSemana != null && !(d.ajusteFimSemana in FIM_SEMANA_LABEL)) return "Escolha o que fazer quando a data cai no sábado ou domingo.";
   return "";
 }
 // dados: {descricao, dataInicial (Date com hora), vezes, unidade, termino ("data"|"automatica"), dataFinal (Date), lembreteMin, modelo}
@@ -3701,7 +3762,8 @@ function erroDadosTarefa(d){
 function normalizarDadosTarefa(d){
   const dataFinal = d.termino === "data" ? new Date(d.dataFinal.getFullYear(), d.dataFinal.getMonth(), d.dataFinal.getDate(), 23, 59, 59, 999) : null;
   return {descricao: d.descricao.trim(), dataInicial: new Date(d.dataInicial), vezes: Number(d.vezes), unidade: d.unidade,
-    termino: d.termino, dataFinal, lembreteMin: Number(d.lembreteMin), modelo: d.modelo || null};
+    termino: d.termino, dataFinal, lembreteMin: Number(d.lembreteMin), modelo: d.modelo || null,
+    ajusteFimSemana: d.ajusteFimSemana in FIM_SEMANA_LABEL ? d.ajusteFimSemana : "manter"};
 }
 function modeloDaRequisicao(r){
   return {
@@ -3733,7 +3795,7 @@ function opCriarTarefa(chave, dados, requisicaoInicialId){
   if(!dono) return {ok:false, erro:"Defina seu usuário no 👤 antes de criar tarefas."};
   const erro = erroDadosTarefa(dados);
   if(erro) return {ok:false, erro};
-  const t = Object.assign({id: novoIdTarefa(), chaveCriacao:chave, versao:1, dono, realizacoes:[], desfeitas:[], criadaEm:new Date()}, normalizarDadosTarefa(dados));
+  const t = Object.assign({id: novoIdTarefa(), chaveCriacao:chave, versao:1, dono, realizacoes:[], desfeitas:[], puladas:[], criadaEm:new Date()}, normalizarDadosTarefa(dados));
   const req = requisicaoInicialId ? obterRequisicao(requisicaoInicialId) : null;
   if(req && inicioDoDia(req.data).getTime() === inicioDoDia(t.dataInicial).getTime()){
     t.realizacoes.push({data: t.dataInicial.getTime(), requisicaoId: req.id, em: new Date(req.data), usuario: dono});
@@ -3760,6 +3822,7 @@ function erroGerarDaTarefa(id, versao, dataMs){
   if(!podeAlterarTarefa(t)) return `Só ${t.dono} (quem criou) ou o gestor geral podem gerar a requisição da tarefa ${t.id}.`;
   const feita = realizacaoEm(t, dataMs);
   if(feita) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} já foi realizada (requisição ${feita.requisicaoId}).`;
+  if(puladaEm(t, dataMs)) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} foi pulada. Para gerar, volte-a para Pendente primeiro.`;
   if(!datasTarefaContem(t, dataMs)) return `A data ${fmtDataHora(new Date(dataMs))} não faz mais parte da tarefa ${t.id} (a repetição foi alterada).`;
   if(t.versao !== versao) return `A tarefa ${t.id} foi alterada enquanto você preenchia. Feche e gere de novo pelo painel.`;
   return "";
@@ -3773,6 +3836,7 @@ function opConcluirOcorrencia(id, versao, dataMs, requisicaoId){
   const r = gravarTarefa(id, versao, t=>{
     const jaFeita = realizacaoEm(t, dataMs);
     if(jaFeita) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} já foi realizada (requisição ${jaFeita.requisicaoId}).`;
+    if(puladaEm(t, dataMs)) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} foi pulada.`;
     if(!datasTarefaContem(t, dataMs)) return `A data ${fmtDataHora(new Date(dataMs))} não faz parte da tarefa ${t.id}.`;
     t.realizacoes.push({data: dataMs, requisicaoId, em: new Date(), usuario: usuarioAtualNome()});
   });
@@ -3831,8 +3895,35 @@ function opDesfazerGeracao(id, versao, dataMs){
   return {ok:true, t:r.t, requisicaoId: feita.requisicaoId};
 }
 
+// Pular uma data: naquela vez a compra não foi necessária (sobrou estoque, obra parada). Fica registrado com o
+// motivo, a data sai das pendências e o lembrete passa para a próxima. "Retomar" devolve a data para Pendente.
+// FIREBASE: subcoleção tarefas/{id}/puladas/{data}, gravada na mesma transação da versão (FIREBASE-AJUSTES.md).
+function erroPularData(t, dataMs){
+  const feita = realizacaoEm(t, dataMs);
+  if(feita) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} já tem requisição (${feita.requisicaoId}). Se foi por engano, use "Desfazer".`;
+  if(puladaEm(t, dataMs)) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} já foi pulada.`;
+  if(!datasTarefaContem(t, dataMs)) return `A data ${fmtDataHora(new Date(dataMs))} não faz mais parte da tarefa ${t.id} (a repetição foi alterada).`;
+  return "";
+}
+function opPularData(id, versao, dataMs, motivo){
+  const texto = String(motivo || "").trim();
+  return gravarTarefa(id, versao, t=>{
+    if(!texto) return "Descreva o motivo para pular esta data.";
+    const e = erroPularData(t, dataMs); if(e) return e;
+    if(!t.puladas) t.puladas = [];
+    t.puladas.push({data: dataMs, motivo: texto, em: new Date(), usuario: usuarioAtualNome()});
+  });
+}
+function opRetomarData(id, versao, dataMs){
+  return gravarTarefa(id, versao, t=>{
+    const p = puladaEm(t, dataMs);
+    if(!p) return `A data ${fmtDataHora(new Date(dataMs))} da tarefa ${t.id} não está pulada (já foi retomada?).`;
+    t.puladas.splice(t.puladas.indexOf(p), 1);
+  });
+}
+
 // Lembrete: chega no sino de quem criou a tarefa, X minutos antes da data que está pendente. Cada data só
-// avisa uma vez. Aqui no protótipo só roda com a página aberta. FIREBASE: função agendada (FIREBASE-AJUSTES.md).
+// avisa uma vez. Roda com a página aberta e ao abrir o app; só no sino, sem e-mail (decisão do Erick, FIREBASE-AJUSTES.md item 16).
 function verificarLembretesTarefas(agora = new Date()){
   let avisou = false;
   TAREFAS.forEach(t=>{
@@ -3855,7 +3946,7 @@ function atualizarBadgeTarefas(){
   const nome = normalizarNome(usuarioAtualNome());
   const fimHoje = new Date(inicioDoDia(new Date()).getTime() + DIA_MS);
   const n = !nome ? 0 : TAREFAS.filter(t=> normalizarNome(t.dono) === nome)
-    .reduce((soma, t)=> soma + datasTarefaAte(t, fimHoje).filter(d=> !realizacaoEm(t, d.getTime())).length, 0);
+    .reduce((soma, t)=> soma + datasTarefaAte(t, fimHoje).filter(d=> !tratadaEm(t, d.getTime())).length, 0);
   badge.textContent = n > 9 ? "9+" : String(n);
   badge.style.display = n ? "flex" : "none";
 }
@@ -3878,8 +3969,8 @@ function atualizarBadgeTarefas(){
   series.forEach(s=>{
     const r = REQUISICOES.find(x=> x.solicitante === s.dono);
     const id = novoIdTarefa();
-    const t = {id, chaveCriacao:"seed:" + id, versao:1, dono:s.dono, realizacoes:[], desfeitas:[], criadaEm:s.inicio, descricao:s.descricao,
-      dataInicial:s.inicio, vezes:s.vezes, unidade:s.unidade, termino:s.termino,
+    const t = {id, chaveCriacao:"seed:" + id, versao:1, dono:s.dono, realizacoes:[], desfeitas:[], puladas:[], criadaEm:s.inicio, descricao:s.descricao,
+      dataInicial:s.inicio, vezes:s.vezes, unidade:s.unidade, termino:s.termino, ajusteFimSemana:"manter",
       dataFinal: s.dataFinal ? new Date(s.dataFinal.getFullYear(), s.dataFinal.getMonth(), s.dataFinal.getDate(), 23, 59, 59, 999) : null,
       lembreteMin:s.lembreteMin, modelo: Object.assign(modeloDaRequisicao(r || REQUISICOES[0]), {solicitante:s.dono})};
     datasTarefaAte(t, s.corte).forEach(d=> t.realizacoes.push({data:d.getTime(), requisicaoId: r ? r.id : null, em:d, usuario:s.dono}));
@@ -3928,6 +4019,7 @@ function fmtPrevisao(d){
 function badgeSituacao(l){
   if(l.status === "realizada") return `<span class="badge tf-realizada">Realizada</span>`;
   if(l.status === "prevista") return `<span class="badge tf-prevista">Prevista</span>`;
+  if(l.status === "pulada") return `<span class="badge tf-pulada" title="${escapeHtml(l.motivo || "")}">Pulada</span>`;
   return `<span class="badge tf-pendente">Pendente</span>${l.atrasada ? ` <span class="badge atraso">Atrasada</span>` : ""}`;
 }
 function linkRequisicao(id){
@@ -3938,6 +4030,12 @@ function botaoDesfazer(t, ms){
 }
 function botaoGerar(t, d){
   return `<button type="button" class="req-btn" data-acao="gerar" data-id="${t.id}" data-data="${d.getTime()}">▶ Gerar requisição</button>`;
+}
+function botaoPular(t, ms){
+  return `<button type="button" class="req-btn" data-acao="pular" data-id="${t.id}" data-data="${ms}" title="Não precisa comprar desta vez: a data sai das pendências, com o motivo">⏭ Pular</button>`;
+}
+function botaoRetomar(t, ms){
+  return `<button type="button" class="req-btn" data-acao="retomar" data-id="${t.id}" data-data="${ms}" title="A data volta para Pendente">↺ Retomar</button>`;
 }
 function renderPainelTarefas(){
   const lista = document.getElementById("tarefasLista");
@@ -3957,7 +4055,9 @@ function renderPainelTarefas(){
     lista.innerHTML = cab + linhas.map(l=>{
       const t = l.t;
       const pode = podeAlterarTarefa(t);
-      const acoes = (l.status === "pendente" && pode ? botaoGerar(t, l.data) : "")
+      const ms = l.data.getTime();
+      const acoes = (l.status === "pendente" && pode ? botaoGerar(t, l.data) + botaoPular(t, ms) : "")
+        + (l.status === "pulada" && pode ? botaoRetomar(t, ms) : "")
         + (l.status === "realizada" && podeDesfazerGeracao(t, l.data.getTime()) ? botaoDesfazer(t, l.data.getTime()) : "")
         + `<button type="button" class="req-btn" data-acao="historico" data-id="${t.id}" title="Histórico da tarefa">🕓 Histórico</button>`;
       return `<div class="tarefa-linha${l.status === "prevista" ? " prevista" : ""}" data-tarefa="${t.id}" data-data="${l.data.getTime()}">
@@ -3976,6 +4076,7 @@ function renderPainelTarefas(){
     ["Total", reais.length, ""],
     ["Pendentes", reais.filter(l=> l.status === "pendente").length, ""],
     ["Realizadas", reais.filter(l=> l.status === "realizada").length, ""],
+    ["Puladas", reais.filter(l=> l.status === "pulada").length, ""],
     ["Atrasadas", reais.filter(l=> l.atrasada).length, "warn"],
   ];
   totaisEl.innerHTML = totais.map(([rotulo, n, cls])=> `<div class="kpi"><div class="label">${rotulo}</div><div class="value ${cls}">${n}</div></div>`).join("");
@@ -4013,6 +4114,11 @@ function tratarCliqueTarefas(e, aoSair, aoAtualizar){
     if(e.detail <= 1) desfazerGeracao(t.id, Number(btn.dataset.data), aoAtualizar);
     return true;
   }
+  if(btn.dataset.acao === "pular"){ abrirPularData(t.id, Number(btn.dataset.data), aoAtualizar); return true; }
+  if(btn.dataset.acao === "retomar"){
+    if(e.detail <= 1) retomarData(t.id, Number(btn.dataset.data), aoAtualizar);
+    return true;
+  }
   aoSair();
   if(btn.dataset.acao === "historico") abrirHistoricoTarefa(t.id);
   return true;
@@ -4033,8 +4139,57 @@ function gerarRequisicaoDaTarefa(id, dataMs, aoAtualizar){
   concluirOperacao(resultado, null);
   atualizarBadgeTarefas();
   aoAtualizar();
-  if(resultado.ok) mostrarAviso(`Requisição ${resultado.r.id} gerada pela tarefa ${id}.`, "", {rotulo:"↩ Desfazer", fn:()=> desfazerGeracao(id, dataMs, aoAtualizar)});
+  // Mostra com que projeto e origem a requisição saiu: se o modelo da tarefa ficou velho, dá para ver na hora e desfazer.
+  if(resultado.ok){
+    const r = resultado.r;
+    mostrarAviso(`Requisição ${r.id} gerada pela tarefa ${id} · projeto ${r.projetoNumero}${r.projetoNome ? " — " + r.projetoNome : ""} · ${r.origem}.`,
+      "", {rotulo:"↩ Desfazer", fn:()=> desfazerGeracao(id, dataMs, aoAtualizar)});
+  }
 }
+// Retomar: a data pulada volta para Pendente.
+function retomarData(id, dataMs, aoAtualizar){
+  const t = obterTarefa(id);
+  const resultado = t ? opRetomarData(id, t.versao, dataMs) : {ok:false, erro:"Esta tarefa não existe mais (foi excluída)."};
+  if(!resultado.ok){ mostrarAviso(resultado.erro, "erro"); return; }
+  atualizarBadgeTarefas();
+  if(aoAtualizar) aoAtualizar();
+  mostrarAviso(`A data ${fmtData(new Date(dataMs))} da tarefa ${id} voltou para Pendente.`);
+}
+
+// ---------- PULAR DATA (com motivo) ----------
+const pularDataBackdrop = document.getElementById("pularDataBackdrop");
+const pularDataMotivo = document.getElementById("pularDataMotivo");
+const pularDataErro = document.getElementById("pularDataErro");
+let pularDataAlvo = null; // {id, versao, data, aoAtualizar}
+function abrirPularData(id, dataMs, aoAtualizar){
+  const t = obterTarefa(id);
+  if(!t) return;
+  const erro = !podeAlterarTarefa(t) ? `Só ${t.dono} (quem criou) ou o gestor geral podem pular datas da tarefa ${t.id}.` : erroPularData(t, dataMs);
+  if(erro){ mostrarAviso(erro, "erro"); return; }
+  pularDataAlvo = {id: t.id, versao: t.versao, data: dataMs, aoAtualizar};
+  document.getElementById("pularDataTexto").textContent =
+    `Pular a data ${fmtPrevisao(new Date(dataMs))} da tarefa ${t.id} ("${resumoTarefa(t)}")? Nenhuma requisição é gerada para ela, e o lembrete passa para a próxima data. Dá para retomar depois.`;
+  pularDataMotivo.value = "";
+  pularDataErro.classList.remove("show");
+  pularDataBackdrop.classList.add("open");
+  pularDataMotivo.focus();
+}
+function fecharPularData(){ pularDataBackdrop.classList.remove("open"); pularDataAlvo = null; }
+document.getElementById("pularDataClose").addEventListener("click", fecharPularData);
+document.getElementById("pularDataCancelar").addEventListener("click", fecharPularData);
+pularDataBackdrop.addEventListener("click", (e)=>{ if(e.target === pularDataBackdrop) fecharPularData(); });
+const btnPularDataConfirmar = document.getElementById("pularDataConfirmar");
+btnPularDataConfirmar.addEventListener("click", ()=> comBotaoTravado(btnPularDataConfirmar, ()=>{
+  const alvo = pularDataAlvo;
+  if(!alvo) return;
+  const resultado = opPularData(alvo.id, alvo.versao, alvo.data, pularDataMotivo.value);
+  if(!resultado.ok){ pularDataErro.textContent = resultado.erro; pularDataErro.classList.add("show"); return; }
+  fecharPularData();
+  atualizarBadgeTarefas();
+  if(alvo.aoAtualizar) alvo.aoAtualizar();
+  const prox = proximaPendente(resultado.t);
+  mostrarAviso(`Data ${fmtData(new Date(alvo.data))} pulada.${prox ? ` A próxima é ${fmtDataHora(prox)}.` : ""}`);
+}));
 function desfazerGeracao(id, dataMs, aoAtualizar){
   const t = obterTarefa(id);
   const resultado = t ? opDesfazerGeracao(id, t.versao, dataMs) : {ok:false, erro:"Esta tarefa não existe mais (foi excluída)."};
@@ -4074,11 +4229,11 @@ function abrirHistoricoTarefa(id){
   document.getElementById("tarefaHistTitulo").textContent = `Tarefa ${t.id}`;
   document.getElementById("tarefaHistCorpo").innerHTML = `
     <p class="tarefa-hist-resumo"><b>${escapeHtml(t.descricao)}</b><br>
-      Repete ${escapeHtml(descreverRecorrencia(t))}, a partir de ${fmtDataHora(t.dataInicial)} · ${escapeHtml(descreverTermino(t))}<br>
+      Repete ${escapeHtml(descreverRecorrencia(t))}, a partir de ${fmtDataHora(t.dataInicial)} · ${escapeHtml(descreverTermino(t))}${descreverFimDeSemana(t) ? " · " + escapeHtml(descreverFimDeSemana(t)) : ""}<br>
       Lembrete: ${LEMBRETE_LABEL[t.lembreteMin]} · Criada por ${escapeHtml(t.dono)}</p>
     ${t.modelo ? `<div class="tarefa-modelo">${descreverModelo(t.modelo)}</div>` : ""}
     <p class="tarefa-hist-titulo">Pendentes</p>
-    <ul class="tarefa-hist-lista" id="tarefaHistPendentes">${pendentes.length ? pendentes.map(({d, s})=> li(`<span>${fmtPrevisao(d)} ${s.atrasada ? `<span class="badge atraso">Atrasada</span>` : ""}</span>${pode ? botaoGerar(t, d) : ""}`)).join("")
+    <ul class="tarefa-hist-lista" id="tarefaHistPendentes">${pendentes.length ? pendentes.map(({d, s})=> li(`<span>${fmtPrevisao(d)} ${s.atrasada ? `<span class="badge atraso">Atrasada</span>` : ""}</span><span>${pode ? botaoGerar(t, d) + " " + botaoPular(t, d.getTime()) : ""}</span>`)).join("")
       : `<li class="vazio">Nada pendente.</li>`}</ul>
     <p class="tarefa-hist-titulo">Próximas datas</p>
     <ul class="tarefa-hist-lista" id="tarefaHistPrevistas">${previstas.length ? previstas.map(d=> li(`<span>${fmtPrevisao(d)}</span><span class="badge tf-prevista">Prevista</span>`)).join("")
@@ -4087,6 +4242,8 @@ function abrirHistoricoTarefa(id){
     <p class="tarefa-hist-titulo">Requisições geradas</p>
     <ul class="tarefa-hist-lista" id="tarefaHistFeitas">${feitas.length ? feitas.map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${linkRequisicao(x.requisicaoId)} <span class="badge tf-realizada">Realizada</span>${podeDesfazerGeracao(t, x.data) ? " " + botaoDesfazer(t, x.data) : ""}</span>`)).join("")
       : `<li class="vazio">Nenhuma requisição gerada ainda.</li>`}</ul>
+    ${(t.puladas || []).length ? `<p class="tarefa-hist-titulo">Datas puladas</p>
+    <ul class="tarefa-hist-lista" id="tarefaHistPuladas">${[...t.puladas].sort((a,b)=> b.data - a.data).map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}<br><span class="table-subtext">${escapeHtml(x.motivo)} — ${escapeHtml(x.usuario || "—")} em ${fmtDataHora(x.em)}</span></span><span><span class="badge tf-pulada">Pulada</span>${pode ? " " + botaoRetomar(t, x.data) : ""}</span>`)).join("")}</ul>` : ""}
     ${t.desfeitas.length ? `<p class="tarefa-hist-titulo">Gerações desfeitas</p>
     <ul class="tarefa-hist-lista" id="tarefaHistDesfeitas">${[...t.desfeitas].sort((a,b)=> b.em - a.em).map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${linkRequisicao(x.requisicaoId)} <span class="badge st-cancelado">Cancelada</span> <span class="table-subtext">por ${escapeHtml(x.usuario || "—")} em ${fmtDataHora(x.em)}</span></span>`)).join("")}</ul>` : ""}`;
   document.getElementById("tarefaHistEditar").style.display = pode ? "" : "none";
@@ -4130,6 +4287,7 @@ function dadosDoFormTarefa(modelo){
     termino: document.getElementById("tTerminoAuto").checked ? "automatica" : "data",
     dataFinal: lerDataInput("tDataFinal"),
     lembreteMin: document.getElementById("tLembrete").value,
+    ajusteFimSemana: document.getElementById("tFimSemana").value,
     modelo,
   };
 }
@@ -4149,7 +4307,7 @@ function atualizarPreviaTarefa(){
   previa.innerHTML = datas.slice(0, 6).map(d=> fmtPrevisao(d)).join("<br>")
     + (mais ? `<br>… ${auto ? "e segue sem data final" : `até ${fmtData(t.dataFinal)}`}` : "");
 }
-["tData","tHora","tVezes","tUnidade","tDataFinal","tTerminoData","tTerminoAuto"].forEach(id=>{
+["tData","tHora","tVezes","tUnidade","tDataFinal","tTerminoData","tTerminoAuto","tFimSemana"].forEach(id=>{
   const el = document.getElementById(id);
   el.addEventListener("input", atualizarPreviaTarefa);
   el.addEventListener("change", atualizarPreviaTarefa);
@@ -4188,6 +4346,7 @@ function abrirFormTarefa(opcoes){
   document.getElementById("tTerminoAuto").checked = base.termino === "automatica";
   document.getElementById("tDataFinal").value = base.dataFinal ? dataParaInput(base.dataFinal) : "";
   document.getElementById("tLembrete").value = String(base.lembreteMin);
+  document.getElementById("tFimSemana").value = base.ajusteFimSemana || "manter";
   atualizarPreviaTarefa();
   fecharPainelTarefas();
   modalBackdrop.querySelector(".modal-body").scrollTop = 0;

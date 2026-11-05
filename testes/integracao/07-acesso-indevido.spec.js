@@ -139,6 +139,49 @@ test.describe("7. Acesso indevido (dados de outra pessoa)", () => {
     });
   });
 
+  // Regra confirmada pelo Erick em 05/11/2026: reabrir segue a mesma permissão de cancelar.
+  test.describe("7.7 reabrir requisição cancelada de outra pessoa", () => {
+    test("quando não sou solicitante, gestor nem selecionado, então a reabertura é recusada e o botão não aparece", async ({ page }) => {
+      await abrirApp(page);
+      const id = await idEm(page, "cancelado", { exceto: INTRUSO });
+      await comoUsuario(page, INTRUSO);
+      const res = await op(page, "opReabrir", id, "tentativa indevida");
+      expect(res.ok, "reabertura por quem não tem permissão deveria ser recusada").toBe(false);
+      expect(res.erro).toContain("reabrir");
+      expect((await requisicao(page, id)).status).toBe("cancelado");
+      await page.evaluate((id) => abrirDrawer(id), id);
+      await expect(page.locator("#reqStatusCancelar")).toBeHidden();
+    });
+
+    test("quando não tenho permissão e escolho Pendente na lista de status, então aparece o aviso e nada muda", async ({ page }) => {
+      await abrirApp(page);
+      const id = await idEm(page, "cancelado", { exceto: INTRUSO });
+      await comoUsuario(page, INTRUSO);
+      await page.evaluate((id) => tentarMudarStatus(id, "pendente", false), id);
+      await expect(page.locator("#avisoToast")).toContainText("reabrir");
+      await expect(page.locator("#motivoCancelBackdrop")).not.toHaveClass(/open/);
+      expect((await requisicao(page, id)).status).toBe("cancelado");
+    });
+
+    test("quando sou o solicitante, então consigo reabrir", async ({ page }) => {
+      await abrirApp(page);
+      const id = await idEm(page, "cancelado");
+      await comoUsuario(page, (await requisicao(page, id)).solicitante);
+      const res = await op(page, "opReabrir", id, "voltou a valer");
+      expect(res.ok, res.erro).toBe(true);
+      expect((await requisicao(page, id)).status).toBe("pendente");
+    });
+
+    test("quando o gestor me selecionou, então consigo reabrir a requisição de outra pessoa", async ({ page }) => {
+      await abrirApp(page);
+      expect((await definirSelecionados(page, [SELECIONADO])).ok).toBe(true);
+      const id = await idEm(page, "cancelado", { exceto: SELECIONADO });
+      await comoUsuario(page, SELECIONADO);
+      const res = await op(page, "opReabrir", id, "reaberta por usuário selecionado");
+      expect(res.ok, res.erro).toBe(true);
+    });
+  });
+
   test("7.6 quando quem não é gestor tenta mudar a lista de selecionados, então é recusado", async ({ page }) => {
     await abrirApp(page);
     await comoUsuario(page, INTRUSO);
