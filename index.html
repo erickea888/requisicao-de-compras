@@ -1834,6 +1834,29 @@ function podeAlterarRequisicao(r){
   if(!nome) return false;
   return nome === normalizarNome(r.solicitante) || usuariosAutorizados().some(n=> normalizarNome(n) === nome);
 }
+// Comprador (regra do Erick, 05/11/2026). Sem comprador ainda: quem define é o solicitante, o gestor geral
+// ou o próprio comprador assumindo em seu nome. Com comprador: trocar ou confirmar o envio só o comprador
+// atual ou o gestor geral. FIREBASE: repetir nas Security Rules (FIREBASE-AJUSTES.md item 6).
+function ehUsuarioAtual(nome){
+  const u = normalizarNome(usuarioAtualNome());
+  return !!u && u === normalizarNome(nome);
+}
+function podeDefinirComprador(r, nome){ return usuarioAtualGestor() || ehUsuarioAtual(r.solicitante) || ehUsuarioAtual(nome); }
+function podeTrocarComprador(r){ return usuarioAtualGestor() || ehUsuarioAtual(r.compradorResponsavel); }
+function erroDefinirComprador(r){
+  return `Só ${r.solicitante} (quem pediu), o gestor geral ou o próprio comprador podem assumir a compra da requisição ${r.id}. Para assumir, use o seu nome (o mesmo do botão "👤").`;
+}
+function erroTrocarComprador(r, acao){
+  return `Só o comprador atual (${r.compradorResponsavel}) ou o gestor geral podem ${acao} da requisição ${r.id}.`;
+}
+// Excluir (regra do Erick, 05/11/2026): em Pendente, quem pode alterar; fora de Pendente, só o gestor geral.
+function podeExcluirRequisicao(r){
+  return podeAlterarRequisicao(r) && (r.status === "pendente" || usuarioAtualGestor());
+}
+// Requisição cancelada pelo "Desfazer" de uma tarefa: não pode ser reaberta (a data já voltou para Pendente).
+function tarefaQueDesfez(r){
+  return TAREFAS.find(t=> (t.desfeitas || []).some(x=> x.requisicaoId === r.id && x.tipo !== "excluida")) || null;
+}
 function erroSemPermissao(r, acao){
   return `Só ${r.solicitante} (quem pediu), o gestor geral ou usuários selecionados pelo gestor podem ${acao} a requisição ${r.id}.`;
 }
@@ -1999,7 +2022,7 @@ function abrirDrawer(id){
   if(r.compradorResponsavel && r.status !== "pendente"){
     compWrap.style.display = "";
     document.getElementById("reqDrawerCompradorNome").textContent = r.compradorResponsavel;
-    document.getElementById("btnAlterarComprador").style.display = isFinalizada(r.status) ? "none" : "";
+    document.getElementById("btnAlterarComprador").style.display = (isFinalizada(r.status) || !podeTrocarComprador(r)) ? "none" : "";
   } else {
     compWrap.style.display = "none";
   }
@@ -2094,7 +2117,7 @@ function abrirDrawer(id){
   document.getElementById("reqStatusSalvar").disabled = statusSelect.disabled;
   // Cancelada: o mesmo botão vira "Reabrir". Recebido: etapa final, sem botão.
   const btnCancelarReq = document.getElementById("reqStatusCancelar");
-  btnCancelarReq.style.display = (r.status === "recebido" || !podeAlterar) ? "none" : "";
+  btnCancelarReq.style.display = (r.status === "recebido" || !podeAlterar || (r.status === "cancelado" && tarefaQueDesfez(r))) ? "none" : "";
   btnCancelarReq.textContent = r.status === "cancelado" ? "↺ Reabrir requisição" : "Cancelar requisição";
   btnCancelarReq.classList.toggle("cancelar", r.status !== "cancelado");
   const avisoPermissaoEl = document.getElementById("reqStatusPermissaoAviso");
@@ -2315,7 +2338,12 @@ function erroTransicao(r, novoStatus){
   }
   if(novoStatus === "cancelado" && !podeAlterarRequisicao(r)) return erroSemPermissao(r, "cancelar");
   // Reabrir segue a mesma regra de quem pode cancelar (combinado com o Erick em 05/11/2026).
-  if(r.status === "cancelado" && novoStatus === "pendente" && !podeAlterarRequisicao(r)) return erroSemPermissao(r, "reabrir");
+  if(r.status === "cancelado" && novoStatus === "pendente"){
+    // Desfeita pela tarefa: reabrir criaria uma segunda requisição para a mesma data (decisão do Erick, 05/11/2026).
+    const t = tarefaQueDesfez(r);
+    if(t) return `A requisição ${r.id} foi gerada por engano pela tarefa ${t.id} e desfeita, por isso não pode ser reaberta. Se a compra for necessária, gere de novo pela tarefa ${t.id}.`;
+    if(!podeAlterarRequisicao(r)) return erroSemPermissao(r, "reabrir");
+  }
   return "";
 }
 function dataDeISO(valor){ return new Date(valor + "T00:00:00"); }
@@ -2335,6 +2363,7 @@ function opAssumirCompra(id, versao, nome){
   return gravarRequisicao(id, versao, r=>{
     if(!nome) return "Informe o comprador responsável para continuar.";
     const e = erroTransicao(r, "elaboracao"); if(e) return e;
+    if(!podeDefinirComprador(r, nome)) return erroDefinirComprador(r);
     r.compradorResponsavel = nome;
     r.status = "elaboracao";
     registrarHistorico(r, {status:"elaboracao", motivo:`Comprador responsável: ${nome}.`});
@@ -2344,6 +2373,7 @@ function opAlterarComprador(id, versao, nome){
   return gravarRequisicao(id, versao, r=>{
     if(!nome) return "Informe o comprador responsável para continuar.";
     if(r.status === "pendente" || isFinalizada(r.status)) return `Não dá para alterar o comprador de uma requisição em "${STATUS_LABEL[r.status]}".`;
+    if(!podeTrocarComprador(r)) return erroTrocarComprador(r, "trocar o comprador");
     const anterior = r.compradorResponsavel;
     if(nome === anterior) return "";
     r.compradorResponsavel = nome;
@@ -2356,6 +2386,8 @@ function opConfirmarEnvio(id, versao, dataISO, nomeComprador){
     if(!r.compradorResponsavel && !nomeComprador) return "Informe o comprador responsável para continuar.";
     if(!dataISO) return "Informe a data prevista de entrega para continuar.";
     const e = erroTransicao(r, "enviado"); if(e) return e;
+    if(r.compradorResponsavel){ if(!podeTrocarComprador(r)) return erroTrocarComprador(r, "confirmar o envio"); }
+    else if(!podeDefinirComprador(r, nomeComprador)) return erroDefinirComprador(r);
     const entrada = {status:"enviado"};
     if(!r.compradorResponsavel){
       r.compradorResponsavel = nomeComprador;
@@ -2453,6 +2485,9 @@ function opExcluirRequisicao(id, versao){
     return {ok:false, erro:`A requisição ${r.id} foi alterada por outra ação enquanto você preenchia. Confira os dados e tente de novo.`};
   }
   if(!podeAlterarRequisicao(r)) return {ok:false, erro:erroSemPermissao(r, "excluir")};
+  if(!podeExcluirRequisicao(r)) return {ok:false, erro:`A requisição ${r.id} já está em "${STATUS_LABEL[r.status]}". Fora de Pendente, só o gestor geral pode excluir.`};
+  // Gerada por tarefa: a data volta para Pendente (decisão do Erick, 05/11/2026). FIREBASE: mesma transação.
+  liberarDataDaTarefa(r);
   REQUISICOES.splice(REQUISICOES.indexOf(r), 1);
   return {ok:true, r};
 }
@@ -3509,7 +3544,7 @@ function abrirCardMenu(id, btnEl){
   cardMenuAlvoId = id;
   // "Excluir" só aparece para quem pode (a operação confere de novo ao confirmar).
   const r = obterRequisicao(id);
-  document.getElementById("cardMenuExcluir").style.display = (r && podeAlterarRequisicao(r)) ? "" : "none";
+  document.getElementById("cardMenuExcluir").style.display = (r && podeExcluirRequisicao(r)) ? "" : "none";
   cardMenu.classList.add("open");
   const rect = btnEl.getBoundingClientRect();
   const largura = cardMenu.offsetWidth || 150;
@@ -3873,6 +3908,17 @@ function erroDesfazerGeracao(t, dataMs){
   return "";
 }
 function podeDesfazerGeracao(t, dataMs){ return !erroDesfazerGeracao(t, dataMs); }
+// Requisição gerada por tarefa foi excluída: a data deixa de ser Realizada e volta para Pendente. Quem pode
+// excluir a requisição já foi conferido por opExcluirRequisicao; aqui só registra na tarefa (tipo "excluida").
+function liberarDataDaTarefa(r){
+  TAREFAS.forEach(t=>{
+    const feita = (t.realizacoes || []).find(x=> x.requisicaoId === r.id);
+    if(!feita) return;
+    t.realizacoes.splice(t.realizacoes.indexOf(feita), 1);
+    t.desfeitas.push({data: feita.data, requisicaoId: r.id, em: new Date(), usuario: usuarioAtualNome(), tipo: "excluida"});
+    t.versao++;
+  });
+}
 // FIREBASE: cancelar a requisição e devolver a data na mesma transação (FIREBASE-AJUSTES.md).
 function opDesfazerGeracao(id, versao, dataMs){
   const t0 = obterTarefa(id);
@@ -4245,7 +4291,7 @@ function abrirHistoricoTarefa(id){
     ${(t.puladas || []).length ? `<p class="tarefa-hist-titulo">Datas puladas</p>
     <ul class="tarefa-hist-lista" id="tarefaHistPuladas">${[...t.puladas].sort((a,b)=> b.data - a.data).map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}<br><span class="table-subtext">${escapeHtml(x.motivo)} — ${escapeHtml(x.usuario || "—")} em ${fmtDataHora(x.em)}</span></span><span><span class="badge tf-pulada">Pulada</span>${pode ? " " + botaoRetomar(t, x.data) : ""}</span>`)).join("")}</ul>` : ""}
     ${t.desfeitas.length ? `<p class="tarefa-hist-titulo">Gerações desfeitas</p>
-    <ul class="tarefa-hist-lista" id="tarefaHistDesfeitas">${[...t.desfeitas].sort((a,b)=> b.em - a.em).map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${linkRequisicao(x.requisicaoId)} <span class="badge st-cancelado">Cancelada</span> <span class="table-subtext">por ${escapeHtml(x.usuario || "—")} em ${fmtDataHora(x.em)}</span></span>`)).join("")}</ul>` : ""}`;
+    <ul class="tarefa-hist-lista" id="tarefaHistDesfeitas">${[...t.desfeitas].sort((a,b)=> b.em - a.em).map(x=> li(`<span>${fmtPrevisao(new Date(x.data))}</span><span>${x.tipo === "excluida" ? `${escapeHtml(x.requisicaoId)} <span class="badge st-cancelado">Excluída</span>` : `${linkRequisicao(x.requisicaoId)} <span class="badge st-cancelado">Cancelada</span>`} <span class="table-subtext">por ${escapeHtml(x.usuario || "—")} em ${fmtDataHora(x.em)}</span></span>`)).join("")}</ul>` : ""}`;
   document.getElementById("tarefaHistEditar").style.display = pode ? "" : "none";
   document.getElementById("tarefaHistExcluir").style.display = pode ? "" : "none";
   tarefaHistBackdrop.classList.add("open");

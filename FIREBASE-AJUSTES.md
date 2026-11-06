@@ -45,6 +45,9 @@ A ordem de preferência é a mesma da revisão: (a) ID único, (b) operação at
   - `versao` só pode subir de 1 em 1.
   - Histórico e comentários só podem ser criados, nunca alterados ou apagados.
   - Editar, cancelar e excluir só para o solicitante, o gestor ou quem estiver na lista `config/permissoes` (hoje `usuariosAutorizados()`, guardada no navegador). Só o gestor grava essa lista.
+  - Comprador: sem comprador, só o solicitante, o gestor ou quem grava o próprio nome como comprador. Com comprador, trocar e confirmar o envio só o comprador atual ou o gestor.
+  - Excluir fora de Pendente só o gestor. Excluir requisição gerada por tarefa apaga a realização da data na mesma transação.
+  - Reabrir é recusado quando a requisição foi cancelada pelo Desfazer da tarefa.
   - Quantidade dos itens maior que zero; comentário com até 20.000 caracteres.
 
 - [ ] **7. Botões durante o envio.**
