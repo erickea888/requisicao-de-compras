@@ -2485,7 +2485,8 @@ function erroQuantidadeItens(itens){
 }
 // dados: {solicitante, origem, projetoNumero, projetoNome, prioridade, observacao, faturamentoDireto, anexos, itens}
 // Edição só vale enquanto a requisição estiver Pendente — conferido de novo na hora de gravar.
-function opEditarRequisicao(id, versao, dados){
+function opEditarRequisicao(id, versao, dadosRecebidos){
+  const dados = camposPermitidosRequisicao(dadosRecebidos);
   return gravarRequisicao(id, versao, r=>{
     if(!podeAlterarRequisicao(r)) return erroSemPermissao(r, "editar");
     if(r.status !== "pendente") return `A requisição ${r.id} já saiu de Pendente (está em "${STATUS_LABEL[r.status]}") e não pode mais ser editada.`;
@@ -2522,16 +2523,35 @@ function novaChaveEnvio(){
   if(typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
 }
+// Segurança (auditoria de 12/11/2026): criar e editar só aceitam estes campos, vindos da tela, da tarefa ou
+// da caixa de saída. Número, status, versão, comprador, datas, histórico e quantidades recebidas nunca vêm de
+// fora: nascem aqui. O nome do projeto é recalculado pelo número.
+// FIREBASE: repetir nas Security Rules com keys().hasOnly([...]) (FIREBASE-AJUSTES.md item 6).
+const CAMPOS_REQUISICAO = ["solicitante","origem","projetoNumero","projetoNome","prioridade","observacao","faturamentoDireto","anexos","itens"];
+function camposPermitidosRequisicao(dados){
+  const d = dados || {};
+  const texto = v=> v == null ? "" : String(v);
+  const projeto = PROJETO_POR_NUMERO[texto(d.projetoNumero)];
+  return {
+    solicitante: texto(d.solicitante), origem: texto(d.origem), projetoNumero: texto(d.projetoNumero),
+    projetoNome: projeto ? projeto.nome : "",
+    prioridade: texto(d.prioridade), observacao: texto(d.observacao), faturamentoDireto: d.faturamentoDireto === true,
+    anexos: (Array.isArray(d.anexos) ? d.anexos : []).map(a=> ({name: texto(a && a.name), url: texto(a && a.url), type: texto(a && a.type)})),
+    itens: (Array.isArray(d.itens) ? d.itens : []).map(i=> ({descricao: texto(i && i.descricao), modelo: texto(i && i.modelo), quantidade: Number(i && i.quantidade)})),
+  };
+}
 function novaRequisicaoBase(chave, dados){
+  const campos = camposPermitidosRequisicao(dados);
   return Object.assign({
     id: novoId(), chaveCriacao: chave, versao: 1, data: new Date(),
     motivoCancelamento:"", comentarios:[], status:"pendente",
-  }, dados, {
-    historico:[{status:"pendente", data:new Date(), usuario: usuarioAtualNome() || dados.solicitante}],
+  }, campos, {
+    historico:[{status:"pendente", data:new Date(), usuario: usuarioAtualNome() || campos.solicitante}],
   });
 }
 // dados: os mesmos campos de opEditarRequisicao.
-function opCriarRequisicao(chave, dados){
+function opCriarRequisicao(chave, dadosRecebidos){
+  const dados = camposPermitidosRequisicao(dadosRecebidos);
   const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const existente = REQUISICOES.find(x=> x.chaveCriacao === chave);
   if(existente) return {ok:true, r:existente, repetido:true};

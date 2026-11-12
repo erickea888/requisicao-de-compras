@@ -49,6 +49,7 @@ A ordem de preferência é a mesma da revisão: (a) ID único, (b) operação at
   - Excluir fora de Pendente só o gestor. Excluir requisição gerada por tarefa apaga a realização da data na mesma transação.
   - Reabrir é recusado quando a requisição foi cancelada pelo Desfazer da tarefa.
   - Quantidade dos itens maior que zero; comentário com até 20.000 caracteres.
+  - Criar e editar só com os campos do formulário (`CAMPOS_REQUISICAO` no `index.html`): `request.resource.data.keys().hasOnly([...])` na criação e `diff().affectedKeys().hasOnly([...])` na edição. Na criação, `status == "pendente"`, `versao == 1`, sem comprador, e `projetoNome` igual ao do cadastro do projeto.
 
 - [ ] **7. Botões durante o envio.**
   `comBotaoTravado` já aceita uma Promise: as operações passam a ser `async`, e o botão fica desabilitado até a gravação terminar. É só conforto de tela; a proteção são os itens 1 a 6.

@@ -21,6 +21,7 @@ O protótipo roda 100% no navegador e não tem backend, login nem banco. Por iss
 | 9 | Alta (na produção) | **Dados e anexos em memória / localStorage.** Nada é criptografado nem protegido por acesso. | **Aberto.** Banco com regras por usuário e setor; anexos em armazenamento privado com regras de acesso e links temporários. |
 | 10 | Média | Site hospedado no GitHub Pages **não permite cabeçalhos de segurança** (`X-Frame-Options`, `frame-ancestors`, HSTS configurável). A página pode ser embutida em outro site (clickjacking). | **Aberto.** Resolver na hospedagem real (Firebase Hosting, Cloudflare ou similar), com cabeçalhos configurados. |
 | 11 | Informativo | Não há bibliotecas de terceiros nem chamadas externas. Isso elimina risco de cadeia de suprimentos e vazamento de dados para outros domínios. | OK. Manter assim, ou fixar versão e integridade (SRI) se alguma entrar. |
+| 12 | Alta (na produção) | **Campos aceitos sem filtro** (auditoria de 12/11/2026). Criar, editar e a caixa de saída copiavam qualquer campo recebido: status, número, comprador, histórico, quantidades recebidas. | **Corrigido no protótipo.** Lista fechada de campos (`camposPermitidosRequisicao`), com 4 testes. No Firebase, repetir nas Rules (FIREBASE-AJUSTES item 6). |
 
 ## Atenção: dados reais
 
