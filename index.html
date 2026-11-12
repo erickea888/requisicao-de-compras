@@ -363,6 +363,14 @@
   .recebido-falta{color:var(--warn); font-weight:600;}
   .recebido-ok{color:var(--accent-2); font-weight:600;}
 
+  .faixa-sem-internet{background:var(--panel); color:var(--text); border:1px solid var(--border); border-left:4px solid #d97706; border-radius:10px; padding:10px 14px; font-size:13px; line-height:1.45; margin-bottom:12px;}
+  .caixa-saida{background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; padding:12px 14px; margin-bottom:14px; font-size:13px;}
+  .caixa-saida-topo{display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-bottom:8px;}
+  .caixa-saida-topo .table-subtext{flex:1 1 220px;}
+  .caixa-saida ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
+  .caixa-saida li{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; border-top:1px solid var(--border); padding-top:8px;}
+  .caixa-saida li > span:first-child{flex:1 1 220px; min-width:0; overflow-wrap:anywhere;}
+  .rascunho-aviso{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; border:1px dashed var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px; font-size:12.5px;}
   .aviso-toast{position:fixed; left:50%; bottom:24px; transform:translate(-50%, 20px); max-width:min(520px, calc(100vw - 32px)); background:var(--panel); color:var(--text); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13px; line-height:1.4; box-shadow:0 8px 24px rgba(0,0,0,.18); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:2000; cursor:pointer;}
   .aviso-toast.open{opacity:1; transform:translate(-50%, 0); pointer-events:auto;}
   .aviso-toast.erro{border-left-color:var(--danger);}
@@ -626,6 +634,8 @@
     </div>
 
     <div class="page-content">
+      <div class="faixa-sem-internet" id="faixaSemInternet" role="status" style="display:none;">📵 <b>Sem internet.</b> Novas requisições ficam guardadas neste aparelho e são enviadas sozinhas quando a conexão voltar. As outras ações precisam de internet.</div>
+      <div class="caixa-saida" id="caixaSaida" style="display:none;"></div>
 
       <div class="page-header-row">
         <div>
@@ -827,6 +837,7 @@
     </div>
     <div class="modal-body">
       <p class="form-erro" id="formErro"></p>
+      <div class="rascunho-aviso" id="rascunhoAviso" style="display:none;"><span id="rascunhoTexto"></span> <button type="button" class="req-btn" id="rascunhoDescartar">Descartar rascunho</button></div>
       <div class="form-grid">
         <div class="form-field">
           <label for="fSolicitante">Solicitante *</label>
@@ -1244,6 +1255,10 @@
       <div class="form-field full" style="display:flex; align-items:center; gap:8px; flex-direction:row; margin-top:6px;">
         <input type="checkbox" id="perfilGestorInput" style="width:auto;">
         <label for="perfilGestorInput" style="margin:0;">Sou gestor admin geral (posso alterar Recebido/Não recebido de qualquer requisição)</label>
+      </div>
+      <div class="form-field full" style="display:flex; align-items:center; gap:8px; flex-direction:row; margin-top:6px;">
+        <input type="checkbox" id="perfilSemInternetInput" style="width:auto;">
+        <label for="perfilSemInternetInput" style="margin:0;">📵 Simular sem internet (só para testar o protótipo; vale na hora)</label>
       </div>
       <div class="form-field full" id="perfilAutorizadosWrap" style="display:none; margin-top:12px;">
         <label>Usuários selecionados</label>
@@ -1810,6 +1825,11 @@ const PERFIL_GESTOR_KEY = "suprimentos-demo-requisicoes-usuario-gestor";
 function usuarioAtualNome(){ try{ return localStorage.getItem(PERFIL_NOME_KEY) || ""; }catch(e){ return ""; } }
 function usuarioAtualGestor(){ try{ return localStorage.getItem(PERFIL_GESTOR_KEY) === "1"; }catch(e){ return false; } }
 function normalizarNome(s){ return (s||"").trim().toLowerCase(); }
+// Conexão: sem internet de verdade (navigator.onLine) ou simulada no 👤 para testar o protótipo.
+// Sem internet, as operações que gravam recusam (no Firebase, sem conexão não dá para conferir a versão).
+function simulandoSemInternet(){ try{ return localStorage.getItem("suprimentos-demo-simular-sem-internet") === "1"; }catch(e){ return false; } }
+function semInternet(){ return simulandoSemInternet() || (typeof navigator !== "undefined" && navigator.onLine === false); }
+function erroSemInternet(){ return semInternet() ? "Sem internet: esta ação precisa de conexão. Tente de novo quando a internet voltar." : ""; }
 function podeAlterarRecebimento(r){
   if(usuarioAtualGestor()) return true;
   const nome = normalizarNome(usuarioAtualNome());
@@ -1861,6 +1881,7 @@ function erroSemPermissao(r, acao){
   return `Só ${r.solicitante} (quem pediu), o gestor geral ou usuários selecionados pelo gestor podem ${acao} a requisição ${r.id}.`;
 }
 function opDefinirUsuariosAutorizados(lista){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   if(!usuarioAtualGestor()) return {ok:false, erro:"Só o gestor geral pode definir os usuários selecionados."};
   const limpa = [...new Set((lista || []).map(n=> String(n).trim()).filter(Boolean))];
   try{ localStorage.setItem(AUTORIZADOS_KEY, JSON.stringify(limpa)); }
@@ -2310,6 +2331,7 @@ function obterRequisicao(id){ return REQUISICOES.find(x=>x.id===id); }
 function estadoParaTestes(){ return {requisicoes: REQUISICOES, notificacoes: NOTIFICACOES, tarefas: TAREFAS}; }
 
 function gravarRequisicao(id, versaoVista, aplicar){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const r = obterRequisicao(id);
   if(!r) return {ok:false, erro:"Esta requisição não existe mais (foi excluída)."};
   if(versaoVista != null && r.versao !== versaoVista){
@@ -2479,6 +2501,7 @@ function opEditarRequisicao(id, versao, dados){
 
 // Exclusão: mesma conferência de versão das outras gravações, e só para quem pode alterar (regra 7.5).
 function opExcluirRequisicao(id, versao){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const r = obterRequisicao(id);
   if(!r) return {ok:false, erro:"Esta requisição não existe mais (foi excluída)."};
   if(versao != null && r.versao !== versao){
@@ -2509,6 +2532,7 @@ function novaRequisicaoBase(chave, dados){
 }
 // dados: os mesmos campos de opEditarRequisicao.
 function opCriarRequisicao(chave, dados){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const existente = REQUISICOES.find(x=> x.chaveCriacao === chave);
   if(existente) return {ok:true, r:existente, repetido:true};
   const erroItens = erroQuantidadeItens(dados.itens);
@@ -2520,6 +2544,7 @@ function opCriarRequisicao(chave, dados){
 }
 // A cópia nasce Pendente e sem anexos (cada compra leva seu próprio orçamento atualizado).
 function opDuplicarRequisicao(chave, idOriginal){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const existente = REQUISICOES.find(x=> x.chaveCriacao === chave);
   if(existente) return {ok:true, r:existente, repetido:true};
   const original = obterRequisicao(idOriginal);
@@ -2540,6 +2565,7 @@ const MAX_COMENTARIO = 20000;
 // Comentário não conflita com outras alterações (não usa versão), mas a mesma chave nunca grava duas vezes.
 // FIREBASE: comentários vão para a subcoleção requisicoes/{id}/comentarios/{chave}.
 function opComentar(id, chave, autor, texto, anexos){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const r = obterRequisicao(id);
   if(!r) return {ok:false, erro:"Esta requisição não existe mais (foi excluída)."};
   if(!r.comentarios) r.comentarios = [];
@@ -3387,6 +3413,7 @@ let tarefaForm = null; // {chave} ao criar; {editarId, versao} ao editar; reqOri
 function definirModoTarefa(form){
   tarefaForm = form;
   document.getElementById("tarefaCampos").style.display = form ? "" : "none";
+  document.getElementById("rascunhoAviso").style.display = "none";
 }
 // Preenche os campos da requisição (usado ao editar uma requisição e na tela da tarefa).
 function preencherFormRequisicao(d){
@@ -3426,6 +3453,7 @@ function abrirModalNovaRequisicao(){
   faturamentoAviso.style.display = "none";
   resetItensRapidos();
   document.getElementById("formErro").classList.remove("show");
+  restaurarRascunho();
   modalBackdrop.classList.add("open");
 }
 // Reabre o mesmo modal, agora pré-preenchido, pra corrigir algo (nome de projeto errado, observação
@@ -3640,8 +3668,19 @@ modalCriarBtn.addEventListener("click", ()=> comBotaoTravado(modalCriarBtn, ()=>
     return;
   }
 
+  // Sem internet: guarda no aparelho (caixa de saída) e envia sozinho quando a conexão voltar.
+  if(semInternet()){
+    const guardada = guardarNaCaixaDeSaida(chaveNovaRequisicao, dados);
+    if(!guardada.ok){ erroEl.textContent = guardada.erro; erroEl.classList.add("show"); return; }
+    descartarRascunho();
+    fecharModal();
+    atualizarTelaSemInternet();
+    mostrarAviso("📤 Sem internet: a requisição foi guardada neste aparelho e será enviada sozinha quando a conexão voltar.");
+    return;
+  }
   const resultado = opCriarRequisicao(chaveNovaRequisicao, dados);
   if(!resultado.ok){ erroEl.textContent = resultado.erro; erroEl.classList.add("show"); return; }
+  descartarRascunho();
   fecharModal();
   concluirOperacao(resultado, resultado.r.id);
   if(!resultado.repetido) abrirPerguntaGerarTarefa(resultado.r.id);
@@ -3810,6 +3849,7 @@ function modeloDaRequisicao(r){
 }
 // Mesma conferência de versão das requisições: quem gravou com uma versão velha é recusado.
 function gravarTarefa(id, versaoVista, aplicar){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const t = obterTarefa(id);
   if(!t) return {ok:false, erro:"Esta tarefa não existe mais (foi excluída)."};
   if(!podeAlterarTarefa(t)) return {ok:false, erro:`Só ${t.dono} (quem criou) ou o gestor geral podem alterar a tarefa ${t.id}.`};
@@ -3824,6 +3864,7 @@ function gravarTarefa(id, versaoVista, aplicar){
 // requisicaoInicialId (opcional): a tarefa nasceu de uma requisição criada agora. Se a data inicial é o dia
 // dela, essa primeira data já entra como Realizada, ligada à requisição.
 function opCriarTarefa(chave, dados, requisicaoInicialId){
+  const semRede = erroSemInternet(); if(semRede) return {ok:false, erro:semRede};
   const existente = TAREFAS.find(t=> t.chaveCriacao === chave);
   if(existente) return {ok:true, t:existente, repetido:true};
   const dono = usuarioAtualNome();
@@ -4476,12 +4517,176 @@ verificarLembretesTarefas();
 atualizarBadgeTarefas();
 setInterval(()=>{ verificarLembretesTarefas(); atualizarBadgeTarefas(); }, 30000);
 
+// ---------- SEM INTERNET: RASCUNHO E CAIXA DE SAÍDA ----------
+// Pedido do Erick (12/11/2026): quem está em campo pode perder a conexão bem na hora de criar a requisição.
+// 1) Rascunho: o formulário de nova requisição é salvo no aparelho enquanto a pessoa preenche. Só some quando
+//    a requisição é criada ou a pessoa descarta. Guarda também a chave de envio: reenviar nunca duplica.
+// 2) Caixa de saída: sem internet, "Criar requisição" guarda a requisição no aparelho ("Aguardando envio").
+//    Quando a conexão volta (ou ao abrir o app), ela é enviada sozinha com a mesma chave e recebe o número RC.
+// 3) As outras ações (assumir, enviar, receber, cancelar, editar, comentar, tarefas) precisam de internet,
+//    porque dependem de conferir a versão que outra pessoa pode ter mudado.
+// No protótipo os arquivos anexados só vivem na memória da página: se ela for fechada antes do envio, a
+// requisição sobe sem eles e o histórico avisa. FIREBASE: guardar no IndexedDB (FIREBASE-AJUSTES.md item 19).
+const RASCUNHO_KEY = "suprimentos-demo-requisicoes-rascunho";
+const CAIXA_SAIDA_KEY = "suprimentos-demo-requisicoes-caixa-saida";
+const ANEXOS_CAIXA_SAIDA = {}; // chave de envio → anexos guardados na memória da página
+function lerJSONLocal(k, padrao){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; }catch(e){ return padrao; } }
+function gravarJSONLocal(k, v){
+  try{ if(v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; }
+}
+
+// Rascunho da nova requisição
+function lerFormNovaRequisicao(){
+  return {
+    chave: chaveNovaRequisicao,
+    solicitante: document.getElementById("fSolicitante").value, origem: fOrigem.value, projetoNumero: fProjeto.value,
+    prioridade: document.getElementById("fPrioridade").value, observacao: document.getElementById("fObs").value,
+    faturamentoDireto: fFaturamento.value === "sim",
+    itens: [...itensLista.querySelectorAll(".item-row")].map(row=>({
+      descricao: row.querySelector(".item-descricao").value, modelo: row.querySelector(".item-modelo").value,
+      quantidade: row.querySelector(".item-qtd").value,
+    })),
+    anexosNomes: anexosSelecionados.map(f=> f.name),
+    salvoEm: new Date().toISOString(),
+  };
+}
+function salvarRascunho(){
+  if(modoEdicaoId || tarefaForm || !modalBackdrop.classList.contains("open")) return;
+  const d = lerFormNovaRequisicao();
+  const temAlgo = d.origem || d.projetoNumero || d.observacao.trim() || d.anexosNomes.length || d.itens.some(i=> i.descricao.trim() || i.quantidade);
+  gravarJSONLocal(RASCUNHO_KEY, temAlgo ? d : null);
+}
+function descartarRascunho(){ gravarJSONLocal(RASCUNHO_KEY, null); }
+function esconderAvisoRascunho(){ document.getElementById("rascunhoAviso").style.display = "none"; }
+function restaurarRascunho(){
+  esconderAvisoRascunho();
+  const d = lerJSONLocal(RASCUNHO_KEY, null);
+  if(!d) return;
+  if(d.chave) chaveNovaRequisicao = d.chave;
+  if(d.solicitante) document.getElementById("fSolicitante").value = d.solicitante;
+  fOrigem.value = d.origem || "";
+  fProjeto.value = d.projetoNumero || "";
+  document.getElementById("fPrioridade").value = d.prioridade || "normal";
+  document.getElementById("fObs").value = d.observacao || "";
+  fFaturamento.value = d.faturamentoDireto ? "sim" : "nao";
+  faturamentoAviso.style.display = d.faturamentoDireto ? "block" : "none";
+  preencherItensRapidos((d.itens || []).filter(i=> String(i.descricao || "").trim() || i.quantidade));
+  const anexos = d.anexosNomes || [];
+  document.getElementById("rascunhoTexto").textContent = `📝 Rascunho de ${fmtDataHora(new Date(d.salvoEm))} recuperado.`
+    + (anexos.length ? ` Os anexos (${anexos.join(", ")}) não ficam no rascunho: anexe de novo.` : "");
+  document.getElementById("rascunhoAviso").style.display = "";
+}
+modalBackdrop.addEventListener("input", salvarRascunho);
+modalBackdrop.addEventListener("change", salvarRascunho);
+// Remover item ou anexo não dispara "input": salva logo depois do clique.
+modalBackdrop.addEventListener("click", ()=> setTimeout(salvarRascunho, 0));
+document.getElementById("rascunhoDescartar").addEventListener("click", ()=>{
+  descartarRascunho();
+  abrirModalNovaRequisicao();
+});
+
+// Caixa de saída
+function caixaDeSaida(){ return lerJSONLocal(CAIXA_SAIDA_KEY, []); }
+function guardarNaCaixaDeSaida(chave, dados){
+  const fila = caixaDeSaida();
+  if(fila.some(x=> x.chave === chave)) return {ok:true, repetido:true};
+  const {anexos, ...semAnexos} = dados;
+  fila.push({chave, dados: semAnexos, anexosNomes: (anexos || []).map(a=> a.name), guardadaEm: new Date().toISOString(), usuario: usuarioAtualNome()});
+  if(!gravarJSONLocal(CAIXA_SAIDA_KEY, fila)) return {ok:false, erro:"Não foi possível guardar a requisição neste aparelho (a memória do navegador está cheia)."};
+  ANEXOS_CAIXA_SAIDA[chave] = anexos || [];
+  return {ok:true};
+}
+// Envia o que está na caixa de saída. Cada requisição usa a chave de envio de quando foi guardada: se o
+// primeiro clique chegou ao servidor sem a pessoa saber, o reenvio devolve a mesma requisição (não duplica).
+function enviarCaixaDeSaida(){
+  if(semInternet()) return [];
+  let fila = caixaDeSaida();
+  const enviadas = [];
+  for(const item of [...fila]){
+    const anexos = ANEXOS_CAIXA_SAIDA[item.chave];
+    const perdeuAnexos = !anexos && (item.anexosNomes || []).length > 0;
+    const res = opCriarRequisicao(item.chave, Object.assign({}, item.dados, {anexos: anexos || []}));
+    if(!res.ok){ item.erro = res.erro; continue; }
+    if(!res.repetido){
+      const h = res.r.historico[0];
+      h.motivo = (h.motivo ? h.motivo + " " : "") + `Criada sem internet em ${fmtDataHora(new Date(item.guardadaEm))} e enviada quando a conexão voltou.`
+        + (perdeuAnexos ? ` Os anexos (${item.anexosNomes.join(", ")}) não puderam ser guardados no aparelho: anexe de novo.` : "");
+      res.r.criadaSemInternetEm = new Date(item.guardadaEm);
+    }
+    fila = fila.filter(x=> x.chave !== item.chave);
+    delete ANEXOS_CAIXA_SAIDA[item.chave];
+    enviadas.push({id: res.r.id, repetido: !!res.repetido});
+  }
+  gravarJSONLocal(CAIXA_SAIDA_KEY, fila.length ? fila : null);
+  return enviadas;
+}
+function sincronizarCaixaDeSaida(){
+  const enviadas = enviarCaixaDeSaida();
+  atualizarTelaSemInternet();
+  if(!enviadas.length) return enviadas;
+  renderTabela(); renderKanban(); renderKPIs();
+  const ids = enviadas.map(x=> x.id).join(", ");
+  mostrarAviso(`📤 Internet de volta: ${enviadas.length === 1 ? "a requisição " + ids + ", guardada sem internet, foi enviada." : "as requisições " + ids + ", guardadas sem internet, foram enviadas."}`);
+  return enviadas;
+}
+function descartarDaCaixaDeSaida(chave){
+  const fila = caixaDeSaida().filter(x=> x.chave !== chave);
+  gravarJSONLocal(CAIXA_SAIDA_KEY, fila.length ? fila : null);
+  delete ANEXOS_CAIXA_SAIDA[chave];
+  atualizarTelaSemInternet();
+}
+function atualizarTelaSemInternet(){
+  const off = semInternet();
+  document.getElementById("faixaSemInternet").style.display = off ? "" : "none";
+  const el = document.getElementById("caixaSaida");
+  const fila = caixaDeSaida();
+  el.style.display = fila.length ? "" : "none";
+  if(!fila.length){ el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="caixa-saida-topo"><b>📤 Caixa de saída (${fila.length})</b>`
+    + `<span class="table-subtext">Guardadas neste aparelho. São enviadas sozinhas quando a internet voltar.</span>`
+    + `<button type="button" class="req-btn" id="caixaSaidaEnviar" ${off ? "disabled" : ""}>Enviar agora</button></div>`
+    + `<ul>${fila.map(item=>{
+        const obs = item.dados.observacao || "";
+        return `<li data-chave="${escapeHtml(item.chave)}"><span><b>${escapeHtml(item.dados.projetoNumero)}</b> — ${escapeHtml(obs.length > 70 ? obs.slice(0,70) + "…" : obs)}`
+          + `<div class="table-subtext">${escapeHtml(item.dados.solicitante)} · guardada em ${fmtDataHora(new Date(item.guardadaEm))}</div>`
+          + (item.erro ? `<div class="table-subtext" style="color:var(--danger, #c0392b);">Não foi enviada: ${escapeHtml(item.erro)}</div>` : "")
+          + `</span><span class="badge st-pendente">⏳ Aguardando envio</span>`
+          + `<button type="button" class="req-btn cancelar" data-acao="descartar-caixa" data-chave="${escapeHtml(item.chave)}">Descartar</button></li>`;
+      }).join("")}</ul>`;
+}
+document.getElementById("caixaSaida").addEventListener("click", (e)=>{
+  if(e.target.closest("#caixaSaidaEnviar")){
+    if(semInternet()){ mostrarAviso(erroSemInternet(), "erro"); return; }
+    sincronizarCaixaDeSaida();
+    return;
+  }
+  const btn = e.target.closest('[data-acao="descartar-caixa"]');
+  if(!btn) return;
+  // Descartar apaga a requisição que ainda não foi enviada: pede um segundo clique para confirmar.
+  if(!btn.dataset.confirmar){ btn.dataset.confirmar = "1"; btn.textContent = "Confirmar descarte"; return; }
+  descartarDaCaixaDeSaida(btn.dataset.chave);
+  mostrarAviso("A requisição guardada foi descartada e não será enviada.");
+});
+window.addEventListener("online", sincronizarCaixaDeSaida);
+window.addEventListener("offline", atualizarTelaSemInternet);
+// Simulação para testar no celular sem desligar a internet de verdade (fica no 👤).
+const perfilSemInternetInput = document.getElementById("perfilSemInternetInput");
+document.getElementById("btnPerfilUsuario").addEventListener("click", ()=>{ perfilSemInternetInput.checked = simulandoSemInternet(); });
+perfilSemInternetInput.addEventListener("change", ()=>{
+  try{ if(perfilSemInternetInput.checked) localStorage.setItem("suprimentos-demo-simular-sem-internet", "1"); else localStorage.removeItem("suprimentos-demo-simular-sem-internet"); }catch(e){}
+  if(semInternet()) atualizarTelaSemInternet();
+  else sincronizarCaixaDeSaida();
+});
+
 // ---------- INICIALIZAÇÃO ----------
 renderKPIs();
 renderTabela();
 let visaoSalva = "tabela";
 try{ if(localStorage.getItem(VISAO_LISTA_STORAGE_KEY) === "kanban") visaoSalva = "kanban"; }catch(e){}
 definirVisaoLista(visaoSalva);
+// Ao abrir o app: mostra a faixa/caixa de saída e envia o que ficou guardado sem internet.
+atualizarTelaSemInternet();
+sincronizarCaixaDeSaida();
 
 // ---------- ALTERNÂNCIA DE TEMA ----------
 const temaToggleBtn = document.getElementById("temaToggle");

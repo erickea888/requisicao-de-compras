@@ -76,3 +76,17 @@ Hoje as tarefas ficam na memória da página, como as requisições, e somem ao 
 - [ ] **16c. Datas puladas.** `puladas` (data, motivo, quem, quando) vira a subcoleção `tarefas/{id}/puladas/{data}`. Pular e retomar gravam na mesma transação da `versao` da tarefa. Gerar requisição precisa conferir, dentro da transação do item 15, que a data não está pulada.
 - [ ] **17. Security Rules das tarefas.** Só o dono ou o gestor lê e altera; realizações só podem ser criadas, nunca alteradas; repetição, lembrete e ajuste de fim de semana (`manter`, `antecipar`, `adiar`) só com os valores permitidos. Pular data exige motivo.
 - [ ] **18. Tarefa de quem saiu da empresa.** Quando entrar o login (item 10) e for possível desativar um usuário, as tarefas dele continuam gerando pendências no nome dele. O gestor precisa de uma ação "Transferir tarefa" para outra pessoa (muda `dono` e o solicitante do `modelo`, registra no histórico da tarefa).
+
+## Sem internet (pessoa de campo)
+
+Pedido do Erick (12/11/2026): a conexão cai bem na hora de criar a requisição no celular. No protótipo já existem o rascunho automático, a caixa de saída ("Aguardando envio") e a faixa "Sem internet", com testes em `testes/integracao/12-sem-internet.spec.js`. Tudo fica no próprio aparelho, sem servidor novo nem fila no servidor.
+
+- [ ] **19. Caixa de saída de verdade.**
+  - Guardar a fila no **IndexedDB** (hoje é o `localStorage`), inclusive os **arquivos anexados**. No protótipo os anexos só ficam na memória da página: se ela fechar antes do envio, a requisição sobe sem eles e o histórico avisa.
+  - Envio: ao voltar a conexão (`online`) e ao abrir o app, rodar a mesma transação de criação (itens 2 e 3) com a **chave de envio guardada**. O número RC só sai nesse momento, porque o contador em transação precisa de internet.
+  - Falha no meio do envio (a conexão caiu depois do clique, sem resposta): tratar como "sem internet" e colocar na caixa de saída com a mesma chave. Se a primeira tentativa tiver chegado, o `create()` falha e a tela mostra a requisição já criada, sem duplicar.
+  - **Não** usar o modo offline do Firestore (`enableIndexedDbPersistence`) para criar a requisição: ele não roda transação sem internet nem envia arquivos para o Storage. Ele pode ser usado só para **ler** a lista sem internet.
+  - Antes de enviar o que estava guardado, conferir se o login continua válido. Se não estiver, pedir para entrar de novo e manter na caixa de saída.
+  - Avisar quando houver requisição presa na caixa de saída há muito tempo (ex.: mais de 24 h), porque limpar o navegador ou trocar de celular faz perder o que não foi enviado.
+- [ ] **20. App abrindo sem internet (PWA).** Um *service worker* que guarda a página para abrir sem sinal, mais um `manifest` para "Adicionar à tela inicial". Funciona no GitHub Pages (HTTPS) e no Firebase Hosting, sem custo.
+- [ ] **21. Ações que continuam exigindo internet.** Assumir, trocar comprador, confirmar envio, receber, cancelar, reabrir, editar, excluir, duplicar, comentar e tudo das tarefas. Hoje o app recusa com "Sem internet" (`erroSemInternet`). No Firebase isso vem do próprio erro da transação; manter a mesma mensagem e não guardar essas ações para depois.
