@@ -22,6 +22,8 @@ O protótipo roda 100% no navegador e não tem backend, login nem banco. Por iss
 | 10 | Média | Site hospedado no GitHub Pages **não permite cabeçalhos de segurança** (`X-Frame-Options`, `frame-ancestors`, HSTS configurável). A página pode ser embutida em outro site (clickjacking). | **Aberto.** Resolver na hospedagem real (Firebase Hosting, Cloudflare ou similar), com cabeçalhos configurados. |
 | 11 | Informativo | Não há bibliotecas de terceiros nem chamadas externas. Isso elimina risco de cadeia de suprimentos e vazamento de dados para outros domínios. | OK. Manter assim, ou fixar versão e integridade (SRI) se alguma entrar. |
 | 12 | Alta (na produção) | **Campos aceitos sem filtro** (auditoria de 12/11/2026). Criar, editar e a caixa de saída copiavam qualquer campo recebido: status, número, comprador, histórico, quantidades recebidas. | **Corrigido no protótipo.** Lista fechada de campos (`camposPermitidosRequisicao`), com 4 testes. No Firebase, repetir nas Rules (FIREBASE-AJUSTES item 6). |
+| 13 | Média | **Data de entrega sem checar permissão** (auditoria de 12/11/2026). Qualquer pessoa alterava a data e tirava a requisição de "Não recebido". | **Corrigido no protótipo.** Só o solicitante, o comprador atual ou o gestor geral (`podeAlterarDataEntrega`), com 7 testes; o botão "editar data" some para os demais. No Firebase, repetir nas Rules. |
+| 14 | Alta (na produção) | **Solicitante digitado** (auditoria de 12/11/2026): dá para criar em nome de outra pessoa. | **Aberto, por natureza do protótipo** (decisão do Erick): o 👤 é só para testes. Na versão real, o solicitante é o usuário logado com o e-mail da empresa, com conta configurada pelo gestor geral (FIREBASE-AJUSTES item 10). |
 
 ## Atenção: dados reais
 

@@ -4,7 +4,7 @@ Quando um teste falha por bug real, ele **continua falhando** e o bug entra aqui
 
 Rodar todos os testes: `npm test`
 
-Última rodada: **181 testes, 181 passam** (inclui os 4 de campos permitidos da auditoria de segurança, os 21 de sem internet — rascunho, caixa de saída e ações que precisam de conexão —, os 26 da rodada de lacunas de 05/11/2026 e o teste E2E de fumaça). Não há bug aberto.
+Última rodada: **188 testes, 188 passam** (inclui os 7 de data de entrega e os 4 de campos permitidos da auditoria de segurança, os 21 de sem internet — rascunho, caixa de saída e ações que precisam de conexão —, os 26 da rodada de lacunas de 05/11/2026 e o teste E2E de fumaça). Não há bug aberto.
 
 ## Corrigidos
 
@@ -20,6 +20,7 @@ Rodar todos os testes: `npm test`
 | 8 | Ao excluir uma requisição gerada por tarefa, a data continuava Realizada, apontando para uma requisição que não existe. | A data volta para Pendente e o histórico da tarefa registra "Excluída". | `11-permissoes-limites` › 15.3 |
 | 9 | Reabrir uma requisição cancelada pelo Desfazer da tarefa permitia duas requisições para a mesma data. | A reabertura é recusada para todos, com aviso para gerar de novo pela tarefa; o botão Reabrir some. | `11-permissoes-limites` › 16.1, 16.2 |
 | 10 | Auditoria de segurança (12/11/2026): criar, editar e a caixa de saída aceitavam qualquer campo. Uma caixa de saída alterada no aparelho criava requisição já Recebido, com comprador e número escolhidos. | Só os campos do formulário são aceitos; número, status, versão, comprador, datas, histórico e recebidos nascem no app; o nome do projeto é recalculado pelo número. | `13-campos-permitidos` › 18 (os 4 falhavam antes da correção) |
+| 11 | Auditoria de segurança (12/11/2026): qualquer pessoa alterava a data de entrega (e tirava a requisição de Não recebido). | Regra do Erick: só o solicitante, o comprador atual ou o gestor geral; o botão "editar data" some para os demais. | `14-data-entrega` › 19 (os 4 de recusa falhavam antes da correção) |
 
 ## Correções feitas no próprio teste (não no comportamento esperado)
 

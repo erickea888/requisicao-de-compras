@@ -46,6 +46,7 @@ A ordem de preferência é a mesma da revisão: (a) ID único, (b) operação at
   - Histórico e comentários só podem ser criados, nunca alterados ou apagados.
   - Editar, cancelar e excluir só para o solicitante, o gestor ou quem estiver na lista `config/permissoes` (hoje `usuariosAutorizados()`, guardada no navegador). Só o gestor grava essa lista.
   - Comprador: sem comprador, só o solicitante, o gestor ou quem grava o próprio nome como comprador. Com comprador, trocar e confirmar o envio só o comprador atual ou o gestor.
+  - Data de entrega: alterar só o solicitante, o comprador atual ou o gestor geral (regra do Erick, 12/11/2026). A lista de usuários selecionados não vale aqui.
   - Excluir fora de Pendente só o gestor. Excluir requisição gerada por tarefa apaga a realização da data na mesma transação.
   - Reabrir é recusado quando a requisição foi cancelada pelo Desfazer da tarefa.
   - Quantidade dos itens maior que zero; comentário com até 20.000 caracteres.
@@ -62,6 +63,8 @@ A ordem de preferência é a mesma da revisão: (a) ID único, (b) operação at
 
 - [ ] **9. Versão real em repositório privado.** Este repositório é público e deve continuar só com dados fictícios (ver [SEGURANCA.md](SEGURANCA.md)).
 - [ ] **10. Login (Firebase Authentication).** Trocar o usuário digitado em 👤 pelo usuário autenticado (`usuarioAtualNome`, `usuarioAtualGestor`).
+  - Decisão do Erick (12/11/2026): o 👤 existe só para testar o protótipo como usuário normal ou gestor. Na versão real, cada pessoa entra com o **e-mail da empresa**, e a conta (nome e papel) é **configurada pelo gestor geral**. Ninguém escolhe o próprio papel.
+  - O **solicitante** é sempre o usuário logado na criação (`solicitante == request.auth.uid` nas Rules) e não muda depois. O campo "Solicitante" do formulário deixa de ser digitado.
 - [ ] **11. Política de conteúdo (CSP).** Hoje a página bloqueia qualquer conexão de rede (`connect-src 'none'`). Liberar só os endereços do Firebase.
 - [ ] **12. Itens do checklist de implantação** do [SEGURANCA.md](SEGURANCA.md): anexos no Cloud Storage, App Check, cabeçalhos de segurança, backups.
 - [ ] **13. Página de testes.** Ela usa `estadoParaTestes()` para ler os dados. Na versão real, remover essa função ou trocá-la pelos testes no emulador (item 8).

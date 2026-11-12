@@ -1869,6 +1869,14 @@ function erroDefinirComprador(r){
 function erroTrocarComprador(r, acao){
   return `Só o comprador atual (${r.compradorResponsavel}) ou o gestor geral podem ${acao} da requisição ${r.id}.`;
 }
+// Data de entrega (regra do Erick, 12/11/2026): alterar só o solicitante, o comprador atual ou o gestor geral.
+// FIREBASE: repetir nas Security Rules (FIREBASE-AJUSTES.md item 6).
+function podeAlterarDataEntrega(r){
+  return usuarioAtualGestor() || ehUsuarioAtual(r.solicitante) || ehUsuarioAtual(r.compradorResponsavel);
+}
+function erroAlterarDataEntrega(r){
+  return `Só ${r.solicitante} (quem pediu), o comprador${r.compradorResponsavel ? " (" + r.compradorResponsavel + ")" : ""} ou o gestor geral podem alterar a data de entrega da requisição ${r.id}.`;
+}
 // Excluir (regra do Erick, 05/11/2026): em Pendente, quem pode alterar; fora de Pendente, só o gestor geral.
 function podeExcluirRequisicao(r){
   return podeAlterarRequisicao(r) && (r.status === "pendente" || usuarioAtualGestor());
@@ -2073,7 +2081,7 @@ function abrirDrawer(id){
   }
   // O comprador/auxiliar pode ajustar a data combinada enquanto o pedido ainda não foi finalizado
   // (recebido ou cancelado) — por exemplo se o fornecedor renegociar o prazo.
-  if(podeDefinirEntrega){
+  if(podeDefinirEntrega && podeAlterarDataEntrega(r)){
     btnEditarEntrega.style.display = "";
     btnEditarEntrega.textContent = r.dataPrevistaEntrega ? "✎ editar data" : "+ definir data";
     btnEditarEntrega.onclick = ()=> abrirDataEntrega(r.id, true, versaoNaTela);
@@ -2423,6 +2431,7 @@ function opConfirmarEnvio(id, versao, dataISO, nomeComprador){
 // Fornecedor remarcou: muda a data. Em "Não recebido", a nova data devolve a requisição para Enviado.
 function opAlterarDataEntrega(id, versao, dataISO){
   return gravarRequisicao(id, versao, r=>{
+    if(!podeAlterarDataEntrega(r)) return erroAlterarDataEntrega(r);
     if(!dataISO) return "Informe a data prevista de entrega para continuar.";
     if(!["enviado","recebido_parcial","nao_recebido"].includes(r.status)) return `Não dá para alterar a data de entrega de uma requisição em "${STATUS_LABEL[r.status]}".`;
     const statusAnterior = r.status;
