@@ -17,6 +17,23 @@ Na migração, a lógica das operações (`op…` no `index.html`) continua a me
 
 No código, os pontos afetados têm o comentário `FIREBASE:` apontando para este arquivo.
 
+## ⚠️ Ponto de atenção para quem for desenvolver: dividir o `index.html` antes de tudo
+
+> **Leia antes de começar a migração.** Decisão do Erick (12/11/2026): o `index.html` (≈4.700 linhas, CSS + HTML + todo o JavaScript) **só será dividido em arquivos quando o Firebase entrar**, e essa divisão é a **primeira etapa** da migração, antes de qualquer item abaixo. Não dividir no meio de outra mudança.
+
+- [ ] **22. Dividir o arquivo em camadas, sem mudar comportamento.**
+  - **Rede de segurança já pronta:** `testes/integracao/15-caracterizacao-telas.spec.js` registra como as telas funcionam hoje (tabela, filtros, ordenação, KPIs, Kanban, tema, detalhe, histórico, planilha, recebimento, menu ⋮, anexos, câmera) e confere que **todas as 224 funções e 168 constantes públicas** continuam existindo. Esses testes, mais os outros da pasta, precisam passar **ao final de cada passo**.
+  - **Estrutura combinada:** `index.html` (só HTML), `css/estilo.css`, `js/dados/` (dados base, `localStorage`, exemplos — é esta camada que o Firestore substitui), `js/regras/` (formatação, permissões, requisições, tarefas, sem internet), `js/ui/` (um arquivo por tela) e `js/inicio.js`.
+  - **Ordem dos passos:** (1) CSS para arquivo; (2) o script inteiro, sem mudar nada, para `js/app.js`; (3) daí em diante, um pedaço por passo saindo do `app.js`: dados, regras e telas. Cada função muda de arquivo **inteira**, sem ser reescrita. Um commit por passo.
+  - **Não mudar:** nomes de funções, ids da página, classes CSS, campos das requisições e tarefas, chaves do `localStorage`.
+  - **Riscos e como evitar:**
+    - *Ordem de carga.* Hoje tudo está num só script, e as funções existem desde o início. Separadas, uma função só existe depois que o arquivo dela carregou. Conferir, a cada passo, se algum código que roda na carga chama função de um arquivo posterior.
+    - *Scripts comuns, não módulos.* Usar `<script src>` comum, **sem** `type="module"`: os testes e `testes/concorrencia.html` chamam as funções pelo nome global.
+    - *Cache no celular.* Depois de publicar, o navegador pode misturar arquivo novo com velho. Pôr versão no endereço (`js/app.js?v=…`) e trocar a cada publicação.
+    - *Política de conteúdo (CSP).* Incluir `'self'` em `script-src` e `style-src`. No GitHub Pages, `'self'` vale para todo `erickea888.github.io` (todos os repositórios publicados ali). Com o JavaScript fora do HTML, dá para tirar o `'unsafe-inline'` dos scripts (SEGURANCA.md item 7), mas como mudança separada, depois da divisão.
+  - **Misturas conhecidas (mover como estão; separar só depois, com teste):** `renderKPIs` (tela) chama `verificarPrazosEntrega`, que grava status; `tentarMudarStatus`, `concluirOperacao` e `comBotaoTravado` são de tela, mas estão entre as regras; as regras leem o `localStorage` direto (`usuarioAtualNome`, `usuarioAtualGestor`, `simulandoSemInternet`) — é aí que entra o login; requisições e tarefas dependem uma da outra (`liberarDataDaTarefa`, `tarefaQueDesfez`, `opGerarRequisicaoDaTarefa`).
+  - **Regra da refatoração:** não corrigir bug nem mudar regra de negócio durante a divisão. Bug encontrado vai para `testes/LISTA-DE-BUGS.md`.
+
 ## Proteção contra gravações simultâneas
 
 A ordem de preferência é a mesma da revisão: (a) ID único, (b) operação atômica, (c) transação. Sem Redis, fila ou outra infraestrutura.

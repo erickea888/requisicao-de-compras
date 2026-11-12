@@ -4,7 +4,7 @@ Quando um teste falha por bug real, ele **continua falhando** e o bug entra aqui
 
 Rodar todos os testes: `npm test`
 
-Última rodada: **188 testes, 188 passam** (inclui os 7 de data de entrega e os 4 de campos permitidos da auditoria de segurança, os 21 de sem internet — rascunho, caixa de saída e ações que precisam de conexão —, os 26 da rodada de lacunas de 05/11/2026 e o teste E2E de fumaça). Não há bug aberto.
+Última rodada: **207 testes, 207 passam** (inclui os 19 de caracterização das telas, os 7 de data de entrega e os 4 de campos permitidos da auditoria de segurança, os 21 de sem internet — rascunho, caixa de saída e ações que precisam de conexão —, os 26 da rodada de lacunas de 05/11/2026 e o teste E2E de fumaça). Não há bug aberto.
 
 ## Corrigidos
 

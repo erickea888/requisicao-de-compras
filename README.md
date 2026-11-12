@@ -88,7 +88,7 @@ Baixe o `index.html` e abra no navegador. Não há instalação.
 - Filtros salvos por usuário (por exemplo, "minhas compras" e "minhas requisições"), gravados na conta de cada pessoa.
 - Integração com o módulo de Entregas e Retiradas para ligar uma compra à logística de retirada.
 - **Integração com o OMIE (via `omie-automation`):** quando o pedido de compra for criado no OMIE, o nº do pedido e o status voltam sozinhos para a requisição.
-- **Separar o arquivo único** em HTML, CSS e JS ao entrar o Firebase: facilita a manutenção e permite uma CSP sem `'unsafe-inline'` (ver [SEGURANCA.md](SEGURANCA.md), achado 7).
+- **Separar o arquivo único** em HTML, CSS e JS ao entrar o Firebase: facilita a manutenção e permite uma CSP sem `'unsafe-inline'` (ver [SEGURANCA.md](SEGURANCA.md), achado 7). ⚠️ **É a primeira etapa da migração:** plano, riscos e testes de proteção no item 22 do [FIREBASE-AJUSTES.md](FIREBASE-AJUSTES.md).
 - Relatórios: tempo médio por etapa e requisições atrasadas por solicitante.
 
 ## Autor
